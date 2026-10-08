@@ -1,0 +1,139 @@
+
+/* ===== 10b META — persistent profile (localStorage) ===== */
+const META_DEFAULTS = {
+  coins: 0, best: 0,
+  ship: 'vector', owned: ['vector'],
+  upg: {},                 // { twin:true, overcharge:true, magnet:true }
+  diff: 'normal', autoFire: false, muted: false,
+};
+function loadMeta () {
+  const m = Object.assign({}, META_DEFAULTS, { owned: ['vector'], upg: {} });
+  try {
+    const raw = localStorage.getItem('neonvoid_save');
+    if (raw) {
+      const j = JSON.parse(raw);
+      Object.assign(m, j);
+      if (!Array.isArray(m.owned) || !m.owned.includes('vector')) {
+        m.owned = (m.owned && m.owned.includes('vector')) ? m.owned : ['vector'].concat(Array.isArray(m.owned) ? m.owned : []);
+      }
+      if (!m.upg || typeof m.upg !== 'object') m.upg = {};
+      if (!CFG.diff[m.diff]) m.diff = 'normal';
+      if (!CFG.ships[m.ship]) m.ship = 'vector';
+    } else {
+      // migrate the v0.1 best score if present
+      const old = parseInt(localStorage.getItem('neonvoid_best') || '0', 10) || 0;
+      if (old > 0) m.best = old;
+    }
+  } catch (e) { /* corrupted save — play with defaults */ }
+  return m;
+}
+const META = loadMeta();
+function saveMeta () {
+  try { localStorage.setItem('neonvoid_save', JSON.stringify(META)); } catch (e) {}
+}
+const DIFF = () => CFG.diff[META.diff];
+
+/* ===== 01 CORE — boot, renderer, layers ===== */
+const app = new PIXI.Application();
+await app.init({
+  width: window.innerWidth, height: window.innerHeight,
+  background: COL.bar, antialias: true,
+  resolution: Math.min(window.devicePixelRatio || 1, 2),
+  autoDensity: true, powerPreference: 'high-performance',
+});
+document.body.appendChild(app.canvas);
+
+// Best-effort font load (don't block forever if offline)
+try {
+  await Promise.race([
+    Promise.all([
+      document.fonts.load('900 72px Orbitron'),
+      document.fonts.load('700 20px Orbitron'),
+      document.fonts.load('500 16px Orbitron'),
+    ]),
+    new Promise(r => setTimeout(r, 1800)),
+  ]);
+} catch (e) { /* fallback font is fine */ }
+
+// Filters — bloom is the whole aesthetic; RGB split is the hurt kick.
+const FXNS = (PIXI.filters && PIXI.filters.AdvancedBloomFilter) ? PIXI.filters : PIXI;
+const AdvancedBloomFilter = FXNS.AdvancedBloomFilter;
+const RGBSplitFilter = FXNS.RGBSplitFilter;
+
+// Layer tree:
+// stage
+// ├ worldRoot (letterbox transform + shake)
+// │   └ glow [bloom (+rgbSplit on hit)] └ crisp (HUD, no bloom)
+// ├ overlayRoot (letterbox transform, no shake)
+// └ flashRect (fullscreen damage flash)
+const worldRoot = new PIXI.Container();
+const overlayRoot = new PIXI.Container();
+const glow = new PIXI.Container();
+const crisp = new PIXI.Container();
+const glowFilters = [];
+if (AdvancedBloomFilter) glowFilters.push(new AdvancedBloomFilter(CFG.bloom));
+let rgbF = null;
+if (RGBSplitFilter) {
+  // v6 wants an options object; positional args are deprecated
+  rgbF = new RGBSplitFilter({ red: [0, 0], green: [0, 0], blue: [0, 0] });
+  glowFilters.push(rgbF);
+}
+if (glowFilters.length) glow.filters = glowFilters;
+else console.warn('[NeonVoid] pixi-filters not found — running on layered-stroke glow only.');
+worldRoot.addChild(glow, crisp);
+app.stage.addChild(worldRoot, overlayRoot);
+
+// Arena floor (slightly lighter than the letterbox bars so the play space reads instantly)
+const floor = new PIXI.Graphics()
+  .rect(0, 0, W, H)
+  .fill({ color: COL.bg, alpha: 1 });
+glow.addChild(floor);
+
+const fxL      = new PIXI.Container();  // particles, rings, ghosts, telegraphs
+const enemyL   = new PIXI.Container();
+const pickupL  = new PIXI.Container();
+const bulletL  = new PIXI.Container();
+const popupL   = new PIXI.Container();
+glow.addChild(fxL, enemyL, pickupL, bulletL, popupL);
+
+const flashRect = new PIXI.Graphics()
+  .rect(0, 0, window.innerWidth, window.innerHeight)
+  .fill({ color: 0xffffff, alpha: 1 });
+flashRect.alpha = 0;
+app.stage.addChild(flashRect);
+
+// Global "feel" state
+const S = {
+  mode: 'boot',           // boot | title | playing | dying | over | paused
+  time: 0,
+  score: 0, best: META.best, bestBeaten: false, kills: 0,
+  wave: 0, tier: 1, runCoins: 0,
+  combo: 0, comboT: 0,
+  gun: 1,
+  timescale: 1, hitstop: 0,
+  trauma: 0, shakeX: 0, shakeY: 0,
+  gridPulse: 0, flashA: 0, rgbT: 0,
+  dyingT: 0,
+};
+
+function resize () {
+  const vw = window.innerWidth, vh = window.innerHeight;
+  app.renderer.resize(vw, vh);
+  const s = Math.min(vw / W, vh / H);
+  scaleS = s; offX = (vw - W * s) / 2; offY = (vh - H * s) / 2;
+  viewW = vw; viewH = vh;
+  worldRoot.position.set(offX, offY);   worldRoot.scale.set(s);
+  overlayRoot.position.set(offX, offY); overlayRoot.scale.set(s);
+  flashRect.clear().rect(0, 0, vw, vh).fill({ color: 0xffffff, alpha: 1 });
+  flashRect.alpha = S.flashA;
+  const ui = document.getElementById('ui');
+  if (ui) {
+    ui.style.left = offX + 'px';
+    ui.style.top = offY + 'px';
+    ui.style.width = W + 'px';
+    ui.style.height = H + 'px';
+    ui.style.transform = 'scale(' + s + ')';
+  }
+}
+let scaleS = 1, offX = 0, offY = 0, viewW = 0, viewH = 0;
+window.addEventListener('resize', resize);

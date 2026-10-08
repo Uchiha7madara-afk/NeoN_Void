@@ -1,0 +1,183 @@
+/* ============================================================
+   NEON VOID — Feel Slice v0.1  (single-file build)
+   Bands below map 1:1 to the future src/ split.
+   All tuning lives in CFG. All shapes are generated at runtime.
+   ============================================================ */
+(async () => {
+
+function bootFail () {
+  const el = document.getElementById('boot-error');
+  if (el) el.style.display = 'flex';
+}
+if (typeof PIXI === 'undefined') { bootFail(); return; }
+
+/* ===== 00 CONFIG ===== */
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp  = (a, b, t) => a + (b - a) * t;
+const rand  = (a = 1, b) => b === undefined ? Math.random() * a : a + Math.random() * (b - a);
+const damp  = (rate, dt) => 1 - Math.exp(-rate * dt);
+function lerpAngle (a, b, t) {
+  let d = (b - a) % TAU;
+  if (d >  Math.PI) d -= TAU;
+  if (d < -Math.PI) d += TAU;
+  return a + d * t;
+}
+
+const CFG = {
+  world: { w: 1280, h: 720, bound: 24, spawnInset: 46 },
+
+  colors: {
+    bg:      0x0a0014,   // arena floor
+    bar:     0x05010a,   // letterbox
+    grid:    0x9d5cff,   // faint purple grid
+    border:  0xa44dff,   // arena border
+    player:  0x2cf6ff,   // cyan
+    core:    0xdfffff,   // near-white cores
+    trail:   0xff2ec4,   // pink engine
+    drone:   0xff2b4e,   // red drones
+    droneHi: 0xffd9de,
+    text:    '#eaf6ff',
+    textDim: '#8f7fb8',
+  },
+
+  bloom: { threshold: 0.22, bloomScale: 0.85, brightness: 1.12, blur: 7 },
+
+  player: {
+    accel: 2600, maxSpeed: 360, drag: 4.2,
+    turnLerp: 18,
+    radius: 9,            // hitbox — deliberately smaller than the sprite
+    hp: 3, iframes: 1.5,
+    fireRate: 8,          // shots / sec while holding LMB
+    bulletSpeed: 780, bulletLife: 1.05, bulletRadius: 3.5, bulletSpread: 0.014,
+    wallBounce: 0.45,
+    trailRate: 70,        // particles / sec at full thrust
+  },
+
+  drone: {
+    radius: 13, hp: 1,
+    baseSpeed: 62, speedRamp: 0.075, speedCap: 2.5,
+    accel: 300,
+    weaveFreq: 2.1, weaveAmp: 0.55,
+    sepDist: 34, sepForce: 150,
+    spin: 1.3, pulseAmp: 0.09, pulseRate: 3.2,
+    score: 100, maxActive: 34,
+  },
+
+  waves: {
+    quota:        w => 4 + Math.floor(w * 1.7),
+    spawnInterval:w => Math.max(0.42, 1.5 - w * 0.11),
+    breather: 2.2, telegraph: 0.7,
+    minPlayerDist: 190,
+  },
+
+  feel: {
+    shakeMax: 16, traumaDecay: 1.7,
+    traumaKill: 0.34, traumaHurt: 0.85, traumaWall: 0.10,
+    hitstopKill: 0.05, hitstopHurt: 0.10,
+    gridPulseKill: 0.55, gridPulseDecay: 2.4,
+    hurtFlash: 0.24,
+    dyingSlowmo: 0.22, dyingTime: 0.85,
+  },
+
+  pools: { bullets: 96, particles: 420, rings: 24, ghosts: 16, popups: 18, teles: 12 },
+
+  audio: {
+    master: 0.5,
+    shoot: { type: 'square',   f0: 840, fMul: 0.72, dur: 0.07, vol: 0.075 },
+    kill:  { noise: { dur: 0.26, vol: 0.34, lp0: 3200, lp1: 160 },
+             tone: { type: 'triangle', f0: 210, f1: 42, dur: 0.30, vol: 0.22 } },
+    hurt:  { tone: { type: 'sawtooth', f0: 150, f1: 46, dur: 0.22, vol: 0.38 },
+             noise: { dur: 0.12, vol: 0.18, lp0: 700, lp1: 180 } },
+  },
+};
+const W = CFG.world.w, H = CFG.world.h;
+const COL = CFG.colors;
+
+/* ===== 01 CORE — boot, renderer, layers ===== */
+const app = new PIXI.Application();
+await app.init({
+  width: window.innerWidth, height: window.innerHeight,
+  background: COL.bar, antialias: true,
+  resolution: Math.min(window.devicePixelRatio || 1, 2),
+  autoDensity: true, powerPreference: 'high-performance',
+});
+document.body.appendChild(app.canvas);
+
+// Best-effort font load (don't block forever if offline)
+try {
+  await Promise.race([
+    Promise.all([
+      document.fonts.load('900 72px Orbitron'),
+      document.fonts.load('700 20px Orbitron'),
+      document.fonts.load('500 16px Orbitron'),
+    ]),
+    new Promise(r => setTimeout(r, 1800)),
+  ]);
+} catch (e) { /* fallback font is fine */ }
+
+// AdvancedBloomFilter — the whole aesthetic. Graceful fallback if CDN filter pack fails.
+const FXNS = (PIXI.filters && PIXI.filters.AdvancedBloomFilter) ? PIXI.filters : PIXI;
+const AdvancedBloomFilter = FXNS.AdvancedBloomFilter;
+
+// Layer tree:
+// stage
+// ├ worldRoot (letterbox transform + shake) └ glow [bloom] └ crisp (HUD, no bloom)
+// ├ overlayRoot (letterbox transform, no shake)
+// └ flashRect (fullscreen damage flash)
+const worldRoot = new PIXI.Container();
+const overlayRoot = new PIXI.Container();
+const glow = new PIXI.Container();
+const crisp = new PIXI.Container();
+if (AdvancedBloomFilter) {
+  glow.filters = [new AdvancedBloomFilter(CFG.bloom)];
+} else {
+  console.warn('[NeonVoid] pixi-filters not found — running on layered-stroke glow only.');
+}
+worldRoot.addChild(glow, crisp);
+app.stage.addChild(worldRoot, overlayRoot);
+
+// Arena floor (slightly lighter than the letterbox bars so the play space reads instantly)
+const floor = new PIXI.Graphics()
+  .rect(0, 0, W, H)
+  .fill({ color: COL.bg, alpha: 1 });
+glow.addChild(floor);
+
+const fxL      = new PIXI.Container();  // particles, rings, ghosts
+const droneL   = new PIXI.Container();
+const bulletL  = new PIXI.Container();
+const popupL   = new PIXI.Container();
+glow.addChild(fxL, droneL, bulletL, popupL);
+
+const flashRect = new PIXI.Graphics()
+  .rect(0, 0, window.innerWidth, window.innerHeight)
+  .fill({ color: 0xffffff, alpha: 1 });
+flashRect.alpha = 0;
+app.stage.addChild(flashRect);
+
+// Global "feel" state
+const S = {
+  mode: 'boot',           // boot | title | playing | dying | over | paused
+  time: 0,
+  score: 0, best: 0, bestBeaten: false, kills: 0,
+  wave: 0,
+  timescale: 1, hitstop: 0,
+  trauma: 0, shakeX: 0, shakeY: 0,
+  gridPulse: 0, flashA: 0,
+  dyingT: 0,
+};
+try { S.best = parseInt(localStorage.getItem('neonvoid_best') || '0', 10) || 0; } catch (e) {}
+
+function resize () {
+  const vw = window.innerWidth, vh = window.innerHeight;
+  app.renderer.resize(vw, vh);
+  const s = Math.min(vw / W, vh / H);
+  scaleS = s; offX = (vw - W * s) / 2; offY = (vh - H * s) / 2;
+  viewW = vw; viewH = vh;
+  worldRoot.position.set(offX, offY);   worldRoot.scale.set(s);
+  overlayRoot.position.set(offX, offY); overlayRoot.scale.set(s);
+  flashRect.clear().rect(0, 0, vw, vh).fill({ color: 0xffffff, alpha: 1 });
+  flashRect.alpha = S.flashA;
+}
+let scaleS = 1, offX = 0, offY = 0, viewW = 0, viewH = 0;
+window.addEventListener('resize', resize);

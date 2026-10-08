@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>NEON VOID</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+  html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#05010a; }
+  canvas { display:block; cursor:none; }
+  #boot-error {
+    position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+    color:#eaf6ff; font-family:Arial, sans-serif; background:#05010a; z-index:10;
+    text-align:center; padding:24px; line-height:1.8;
+  }
+  /* ---- DOM menu layer (letterboxed exactly like the canvas world) ---- */
+  #ui { position:absolute; transform-origin:0 0; display:none; cursor:default; z-index:5;
+        font-family:'Orbitron', Arial, sans-serif; user-select:none; }
+  #title { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center;
+           justify-content:center; gap:13px;
+           background: radial-gradient(ellipse at 50% 40%, rgba(34,0,66,.38), rgba(5,1,10,.86)); }
+  .logo { font-weight:900; font-size:62px; letter-spacing:10px; color:#2cf6ff;
+          text-shadow:0 0 8px #2cf6ff, 0 0 30px rgba(44,246,255,.55), 3px 3px 0 rgba(255,46,196,.85);
+          animation:flick 4.6s infinite; line-height:1; }
+  @keyframes flick { 0%,100%{opacity:1} 91%{opacity:1} 92%{opacity:.55} 93%{opacity:1}
+                     96%{opacity:.7} 97%{opacity:1} }
+  .tag { font-weight:500; font-size:12px; letter-spacing:9px; color:#8f7fb8; }
+  .statline { font-weight:700; font-size:14px; letter-spacing:3px; color:#eaf6ff; margin-top:2px; }
+  .statline b { color:#ffd23c; }
+  .pills { display:flex; gap:10px; }
+  .pill { font-weight:700; font-size:12px; letter-spacing:2px; color:#8f7fb8;
+          border:1.5px solid rgba(143,127,184,.4); background:rgba(10,0,20,.6);
+          padding:6px 18px; border-radius:3px; cursor:pointer; }
+  .pill:hover { border-color:rgba(44,246,255,.6); color:#2cf6ff; }
+  .pill.on { color:#0a0014; background:#2cf6ff; border-color:#2cf6ff;
+             box-shadow:0 0 14px rgba(44,246,255,.7); }
+  .sect { font-weight:700; font-size:10px; letter-spacing:5px; color:#6b5f8e; margin-top:2px; }
+  .cards { display:flex; gap:12px; }
+  .card { width:196px; border:1.5px solid rgba(44,246,255,.28); background:rgba(10,0,24,.74);
+          border-radius:5px; padding:10px 13px; }
+  .card.eq { border-color:#2cf6ff; box-shadow:0 0 16px rgba(44,246,255,.3); }
+  .card h4 { font-weight:700; font-size:15px; letter-spacing:3px; color:#eaf6ff; margin:0 0 4px; }
+  .card .st { font-weight:500; font-size:10px; color:#8f7fb8; letter-spacing:1px; line-height:1.75; }
+  .card button, .upg button {
+          margin-top:7px; width:100%; font-family:'Orbitron',Arial; font-weight:700; font-size:11px;
+          letter-spacing:1px; padding:6px 0; border-radius:3px; cursor:pointer;
+          border:1.5px solid #ffd23c; color:#ffd23c; background:transparent; }
+  .card button:hover:not(:disabled), .upg button:hover:not(:disabled) {
+          background:#ffd23c; color:#0a0014; box-shadow:0 0 12px rgba(255,210,60,.55); }
+  .card button:disabled, .upg button:disabled { opacity:.35; cursor:default; }
+  .card button.own { border-color:#9dff3c; color:#9dff3c; }
+  .card button.own:hover { background:transparent; box-shadow:none; }
+  .card button.eqd { background:#2cf6ff; color:#0a0014; border-color:#2cf6ff; }
+  .upgs { display:flex; gap:10px; }
+  .upg { width:196px; border:1.5px solid rgba(157,255,60,.25); background:rgba(10,0,24,.74);
+         border-radius:5px; padding:9px 13px; }
+  .upg.owned { border-color:rgba(157,255,60,.55); }
+  .upg h5 { font-weight:700; font-size:12px; letter-spacing:2px; color:#9dff3c; margin:0 0 3px; }
+  .upg .st { font-weight:500; font-size:10px; color:#8f7fb8; line-height:1.5; min-height:30px; }
+  .upg button.owned { border-color:#9dff3c; color:#9dff3c; }
+  .startrow { display:flex; align-items:center; gap:26px; margin-top:4px; }
+  .toggle { display:flex; align-items:center; gap:8px; font-weight:600; font-size:11px;
+            color:#8f7fb8; cursor:pointer; letter-spacing:2px; }
+  .toggle input { accent-color:#2cf6ff; width:15px; height:15px; cursor:pointer; }
+  #startBtn { font-family:'Orbitron',Arial; font-weight:900; font-size:21px; letter-spacing:7px;
+              padding:13px 58px; color:#0a0014; border:none; border-radius:4px; cursor:pointer;
+              background:linear-gradient(90deg,#2cf6ff,#ff2ec4);
+              box-shadow:0 0 22px rgba(255,46,196,.45), 0 0 22px rgba(44,246,255,.35);
+              animation:breathe 1.7s infinite; }
+  #startBtn:hover { transform:scale(1.05); }
+  @keyframes breathe {
+    0%,100% { box-shadow:0 0 14px rgba(255,46,196,.35), 0 0 14px rgba(44,246,255,.25); }
+    50%     { box-shadow:0 0 30px rgba(255,46,196,.7), 0 0 30px rgba(44,246,255,.55); } }
+  .legend { font-weight:500; font-size:10px; letter-spacing:2px; color:#6b5f8e; }
+  .shopmsg { font-weight:700; font-size:11px; letter-spacing:2px; color:#ff2b4e;
+             min-height:15px; opacity:0; transition:opacity .25s; }
+</style>
+</head>
+<body>
+<div id="boot-error">NEON VOID could not load its renderer.<br>PixiJS loads from a CDN — check your internet connection and reload.</div>
+<div id="ui">
+  <div id="title">
+    <div class="logo">NEON VOID</div>
+    <div class="tag">TOP-DOWN NEON ARENA</div>
+    <div class="statline" id="statline"></div>
+    <div class="pills" id="diffPills"></div>
+    <div class="sect">HANGAR — SHIPS</div>
+    <div class="cards" id="shipCards"></div>
+    <div class="sect">UPGRADES</div>
+    <div class="upgs" id="upgRow"></div>
+    <div class="startrow">
+      <label class="toggle"><input type="checkbox" id="afToggle"> AUTO-FIRE</label>
+      <button id="startBtn">ENGAGE</button>
+    </div>
+    <div class="legend">WASD MOVE &nbsp;·&nbsp; MOUSE AIM &nbsp;·&nbsp; HOLD LMB FIRE &nbsp;·&nbsp; F AUTO-FIRE &nbsp;·&nbsp; P PAUSE &nbsp;·&nbsp; M MUTE &nbsp;·&nbsp; R RETRY</div>
+    <div class="shopmsg" id="shopMsg"></div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/pixi.js@8/dist/pixi.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pixi-filters@6/dist/pixi-filters.min.js"></script>
+<script>
+/* ============================================================
+   NEON VOID v1.0 — full build (single file)
+   Bands map 1:1 to the future src/ split.
+   All tuning lives in CFG. All shapes generated at runtime.
+   ============================================================ */
+(async () => {
+
+function bootFail () {
+  const el = document.getElementById('boot-error');
+  if (el) el.style.display = 'flex';
+}
+if (typeof PIXI === 'undefined') { bootFail(); return; }
+
+/* ===== 00 CONFIG ===== */
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp  = (a, b, t) => a + (b - a) * t;
+const rand  = (a = 1, b) => b === undefined ? Math.random() * a : a + Math.random() * (b - a);
+const damp  = (rate, dt) => 1 - Math.exp(-rate * dt);
+function lerpAngle (a, b, t) {
+  let d = (b - a) % TAU;
+  if (d >  Math.PI) d -= TAU;
+  if (d < -Math.PI) d += TAU;
+  return a + d * t;
+}
+
+const CFG = {
+  world: { w: 1280, h: 720, bound: 24, spawnInset: 46 },
+
+  colors: {
+    bg:      0x0a0014,   // arena floor
+    bar:     0x05010a,   // letterbox
+    grid:    0x9d5cff,   // faint purple grid
+    border:  0xa44dff,   // arena border
+    player:  0x2cf6ff,   // cyan
+    core:    0xdfffff,   // near-white cores
+    trail:   0xff2ec4,   // pink engine
+    drone:   0xff2b4e, droneHi: 0xffd9de,      // red
+    hunter:  0xb44bff, hunterHi: 0xefd9ff,     // purple
+    spinner: 0xffe14d, spinnerHi: 0xfff6c9,    // yellow
+    tank:    0x3cff6e, tankHi: 0xd6ffe2,       // green
+    coin:    0xffd23c, heart: 0xff4d6d, gunpk: 0x9dff3c,
+    text:    '#eaf6ff',
+    textDim: '#8f7fb8',
+  },
+
+  bloom: { threshold: 0.22, bloomScale: 0.85, brightness: 1.12, blur: 7 },
+
+  // gun tiers 1..5 — single → twin → spread → lance → nova
+  gunTiers: [
+    { name: 'PULSE',  rate: 8.0, count: 1, spread: 0,     parallel: false, speed: 780,  dmg: 1, pierce: 0, life: 1.05, wave: 0,    tex: 'bullet' },
+    { name: 'TWIN',   rate: 8.6, count: 2, spread: 0.05,  parallel: true,  speed: 800,  dmg: 1, pierce: 0, life: 1.05, wave: 0,    tex: 'bullet' },
+    { name: 'SPREAD', rate: 7.2, count: 3, spread: 0.15,  parallel: false, speed: 760,  dmg: 1, pierce: 0, life: 0.9,  wave: 0,    tex: 'bullet' },
+    { name: 'LANCE',  rate: 6.2, count: 1, spread: 0.006, parallel: false, speed: 1150, dmg: 3, pierce: 2, life: 0.85, wave: 0,    tex: 'lance'  },
+    { name: 'NOVA',   rate: 5.6, count: 5, spread: 0.32,  parallel: false, speed: 820,  dmg: 1, pierce: 0, life: 1.0,  wave: 0.55, tex: 'bullet' },
+  ],
+
+  player: {
+    accel: 2600, maxSpeed: 360, drag: 4.2,
+    turnLerp: 18,
+    radius: 9,            // hitbox — deliberately smaller than the sprite
+    hp: 3, iframes: 1.5,
+    bulletSpread: 0.014,
+    wallBounce: 0.45,
+    trailRate: 70,        // particles / sec at full thrust
+  },
+
+  drone: {
+    radius: 13, hp: 1, hpPerTier: 0,
+    baseSpeed: 62, speedRamp: 0.075, speedCap: 2.5,
+    accel: 300,
+    weaveFreq: 2.1, weaveAmp: 0.55,
+    sepDist: 34, sepForce: 150,
+    spin: 1.3, pulseAmp: 0.09, pulseRate: 3.2,
+    score: 100,
+  },
+  hunter: {
+    radius: 13, hp: 3, hpPerTier: 1,
+    baseSpeed: 120, accel: 360, ring: 270, ringSlack: 70,
+    score: 250, fireMin: 1.7, fireMax: 2.4, charge: 0.38,
+    bulletSpeed: 250, predict: 0.7,
+  },
+  spinner: {
+    radius: 16, hp: 6, hpPerTier: 2,
+    baseSpeed: 46, accel: 130, spin: 2.6,
+    score: 400, sprayEvery: 0.085, sprayDur: 1.25, coolDur: 1.5,
+    sprayRot: 0.44, bulletSpeed: 168,
+  },
+  tank: {
+    radius: 23, hp: 22, hpPerTier: 6,
+    baseSpeed: 34, accel: 95,
+    score: 600, fireCd: 3.3, ringCount: 8, ringSpeed: 150,
+    knock: 1.9,
+  },
+
+  waves: {
+    budget:        w => 3 + w * 1.9 + Math.pow(w, 1.18),
+    spawnInterval: w => Math.max(0.38, 1.25 - w * 0.07),
+    breather: 2.4, telegraph: 0.7, minPlayerDist: 190,
+    unlock: { hunter: 3, spinner: 5, tank: 7 },
+    cost:   { drone: 1, hunter: 3, spinner: 4, tank: 7 },
+    weights:{ drone: 1.0, hunter: 0.6, spinner: 0.4, tank: 0.25 },
+    tierEvery: 5, speedCap: 1.9, maxActive: 26,
+    clearBonus: w => w * 50,
+  },
+
+  drops: {
+    drone:   { coin: 0.14, gun: 0.02, heart: 0.03 },
+    hunter:  { coin: 0.50, gun: 0.07, heart: 0.08 },
+    spinner: { coin: 0.85, gun: 0.12, heart: 0.12 },
+    tank:    { coins: () => 2 + (Math.random() < 0.5 ? 1 : 0), gun: 0.5, heart: 0.5 },
+  },
+
+  pickup: { magnetR: 110, collect: 26, life: 9, pull: 900, pullCap: 520, maxField: 12, coinValue: 5 },
+
+  combo: { window: 2.6, step: 0.1, cap: 5 },
+
+  diff: {
+    easy:   { label: 'EASY',   hpBonus: 1, speed: 0.85, bullet: 0.80, budget: 0.80, iframes: 1.8, mult: 0.8  },
+    normal: { label: 'NORMAL', hpBonus: 0, speed: 1.00, bullet: 1.00, budget: 1.00, iframes: 1.5, mult: 1.0  },
+    hard:   { label: 'HARD',   hpBonus: 0, speed: 1.14, bullet: 1.12, budget: 1.30, iframes: 1.1, mult: 1.35 },
+  },
+
+  ships: {
+    vector: {
+      name: 'VECTOR', cost: 0, flavor: 'BALANCED INTERCEPTOR',
+      accel: 2600, maxSpeed: 360, drag: 4.2, hp: 3, radius: 9, scale: 1.0,
+      color: 0x2cf6ff, trail: 0xff2ec4, pts: [19, 0, -13, -12, -6, 0, -13, 12],
+      stats: 'SPD 360 · HP 3 · HIT 9',
+    },
+    wasp: {
+      name: 'WASP', cost: 300, flavor: 'FAST · FRAGILE FEEL',
+      accel: 3300, maxSpeed: 445, drag: 4.6, hp: 3, radius: 8, scale: 0.9,
+      color: 0x9dff3c, trail: 0x2cf6ff, pts: [21, 0, -15, -9, -5, 0, -15, 9],
+      stats: 'SPD 445 · HP 3 · HIT 8',
+    },
+    juggernaut: {
+      name: 'JUGGERNAUT', cost: 600, flavor: 'HEAVY · EXTRA PLATING',
+      accel: 2200, maxSpeed: 300, drag: 4.0, hp: 4, radius: 11, scale: 1.15,
+      color: 0xffa23c, trail: 0xffe14d, pts: [19, 0, -15, -14, -8, 0, -15, 14],
+      stats: 'SPD 300 · HP 4 · HIT 11',
+    },
+  },
+
+  upgrades: {
+    twin:       { name: 'TWIN CANNON', cost: 250, desc: 'Deploy at gun tier 2 — TWIN' },
+    overcharge: { name: 'OVERCHARGE',   cost: 400, desc: '+18% fire rate, all guns' },
+    magnet:     { name: 'MAGNETIZER',   cost: 300, desc: '+70% pickup magnet radius' },
+  },
+
+  feel: {
+    shakeMax: 16, traumaDecay: 1.7,
+    traumaKill: 0.34, traumaHurt: 0.85, traumaWall: 0.10,
+    hitstopKill: 0.05, hitstopHurt: 0.10,
+    gridPulseKill: 0.55, gridPulseDecay: 2.4,
+    hurtFlash: 0.24,
+    dyingSlowmo: 0.22, dyingTime: 0.85,
+    rgbHurt: 0.22, rgbMag: 9,
+  },
+
+  pools: { bullets: 120, ebullets: 170, particles: 460, rings: 26, ghosts: 18,
+           popups: 20, teles: 14, enemies: 44, pickups: 26 },
+
+  audio: {
+    master: 0.5,
+    shoot: { type: 'square',   f0: 840, fMul: 0.72, dur: 0.07, vol: 0.075 },
+    kill:  { noise: { dur: 0.26, vol: 0.34, lp0: 3200, lp1: 160 },
+             tone: { type: 'triangle', f0: 210, f1: 42, dur: 0.30, vol: 0.22 } },
+    hurt:  { tone: { type: 'sawtooth', f0: 150, f1: 46, dur: 0.22, vol: 0.38 },
+             noise: { dur: 0.12, vol: 0.18, lp0: 700, lp1: 180 } },
+    coin:  { tones: [ { type: 'sine', f0: 1046, f1: 1046, dur: 0.07, vol: 0.14, at: 0 },
+                      { type: 'sine', f0: 1568, f1: 1568, dur: 0.10, vol: 0.14, at: 0.07 } ] },
+    gun:   { tone: { type: 'square', f0: 260, f1: 920, dur: 0.22, vol: 0.2 },
+             noise: { dur: 0.1, vol: 0.1, lp0: 2400, lp1: 900 } },
+    heal:  { tones: [ { type: 'sine', f0: 660, f1: 660, dur: 0.09, vol: 0.15, at: 0 },
+                      { type: 'sine', f0: 990, f1: 990, dur: 0.12, vol: 0.15, at: 0.08 } ] },
+    ui:    { tone: { type: 'square', f0: 1700, f1: 1150, dur: 0.05, vol: 0.05 } },
+    boom:  { noise: { dur: 0.5, vol: 0.5, lp0: 1400, lp1: 90 },
+             tone: { type: 'sine', f0: 95, f1: 28, dur: 0.45, vol: 0.4 } },
+    tier:  { tones: [ { type: 'square', f0: 220, f1: 220, dur: 0.12, vol: 0.16, at: 0 },
+                      { type: 'square', f0: 330, f1: 330, dur: 0.14, vol: 0.16, at: 0.14 } ] },
+  },
+};
+const W = CFG.world.w, H = CFG.world.h;
+const COL = CFG.colors;

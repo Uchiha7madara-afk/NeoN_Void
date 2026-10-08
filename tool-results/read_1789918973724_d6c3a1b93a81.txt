@@ -1,0 +1,702 @@
+    30→    30→  .statline { font-weight:700; font-size:14px; letter-spacing:3px; color:#eaf6ff; margin-top:2px; }
+    31→    31→  .statline b { color:#ffd23c; }
+    32→    32→  .pills { display:flex; gap:10px; }
+    33→    33→  .pill { font-weight:700; font-size:12px; letter-spacing:2px; color:#8f7fb8;
+    34→    34→          border:1.5px solid rgba(143,127,184,.4); background:rgba(10,0,20,.6);
+    35→    35→          padding:6px 18px; border-radius:3px; cursor:pointer; }
+    36→    36→  .pill:hover { border-color:rgba(44,246,255,.6); color:#2cf6ff; }
+    37→    37→  .pill.on { color:#0a0014; background:#2cf6ff; border-color:#2cf6ff;
+    38→    38→             box-shadow:0 0 14px rgba(44,246,255,.7); }
+    39→    39→  .sect { font-weight:700; font-size:10px; letter-spacing:5px; color:#6b5f8e; margin-top:2px; }
+    40→    40→  .cards { display:flex; gap:12px; }
+    41→    41→  .card { width:196px; border:1.5px solid rgba(44,246,255,.28); background:rgba(10,0,24,.74);
+    42→    42→          border-radius:5px; padding:10px 13px; }
+    43→    43→  .card.eq { border-color:#2cf6ff; box-shadow:0 0 16px rgba(44,246,255,.3); }
+    44→    44→  .card h4 { font-weight:700; font-size:15px; letter-spacing:3px; color:#eaf6ff; margin:0 0 4px; }
+    45→    45→  .card .st { font-weight:500; font-size:10px; color:#8f7fb8; letter-spacing:1px; line-height:1.75; }
+    46→    46→  .card button, .upg button {
+    47→    47→          margin-top:7px; width:100%; font-family:'Orbitron',Arial; font-weight:700; font-size:11px;
+    48→    48→          letter-spacing:1px; padding:6px 0; border-radius:3px; cursor:pointer;
+    49→    49→          border:1.5px solid #ffd23c; color:#ffd23c; background:transparent; }
+    50→    50→  .card button:hover:not(:disabled), .upg button:hover:not(:disabled) {
+    51→    51→          background:#ffd23c; color:#0a0014; box-shadow:0 0 12px rgba(255,210,60,.55); }
+    52→    52→  .card button:disabled, .upg button:disabled { opacity:.35; cursor:default; }
+    53→    53→  .card button.own { border-color:#9dff3c; color:#9dff3c; }
+    54→    54→  .card button.own:hover { background:transparent; box-shadow:none; }
+    55→    55→  .card button.eqd { background:#2cf6ff; color:#0a0014; border-color:#2cf6ff; }
+    56→    56→  .upgs { display:flex; gap:10px; }
+    57→    57→  .upg { width:196px; border:1.5px solid rgba(157,255,60,.25); background:rgba(10,0,24,.74);
+    58→    58→         border-radius:5px; padding:9px 13px; }
+    59→    59→  .upg.owned { border-color:rgba(157,255,60,.55); }
+    60→    60→  .upg h5 { font-weight:700; font-size:12px; letter-spacing:2px; color:#9dff3c; margin:0 0 3px; }
+    61→    61→  .upg .st { font-weight:500; font-size:10px; color:#8f7fb8; line-height:1.5; min-height:30px; }
+    62→    62→  .upg button.owned { border-color:#9dff3c; color:#9dff3c; }
+    63→    63→  .startrow { display:flex; align-items:center; gap:26px; margin-top:4px; }
+    64→    64→  .toggle { display:flex; align-items:center; gap:8px; font-weight:600; font-size:11px;
+    65→    65→            color:#8f7fb8; cursor:pointer; letter-spacing:2px; }
+    66→    66→  .toggle input { accent-color:#2cf6ff; width:15px; height:15px; cursor:pointer; }
+    67→    67→  #startBtn { font-family:'Orbitron',Arial; font-weight:900; font-size:21px; letter-spacing:7px;
+    68→    68→              padding:13px 58px; color:#0a0014; border:none; border-radius:4px; cursor:pointer;
+    69→    69→              background:linear-gradient(90deg,#2cf6ff,#ff2ec4);
+    70→    70→              box-shadow:0 0 22px rgba(255,46,196,.45), 0 0 22px rgba(44,246,255,.35);
+    71→    71→              animation:breathe 1.7s infinite; }
+    72→    72→  #startBtn:hover { transform:scale(1.05); }
+    73→    73→  @keyframes breathe {
+    74→    74→    0%,100% { box-shadow:0 0 14px rgba(255,46,196,.35), 0 0 14px rgba(44,246,255,.25); }
+    75→    75→    50%     { box-shadow:0 0 30px rgba(255,46,196,.7), 0 0 30px rgba(44,246,255,.55); } }
+    76→    76→  .legend { font-weight:500; font-size:10px; letter-spacing:2px; color:#6b5f8e; }
+    77→    77→  .shopmsg { font-weight:700; font-size:11px; letter-spacing:2px; color:#ff2b4e;
+    78→    78→             min-height:15px; opacity:0; transition:opacity .25s; }
+    79→    79→</style>
+    80→    80→</head>
+    81→    81→<body>
+    82→    82→<div id="boot-error">NEON VOID could not load its renderer.<br>PixiJS loads from a CDN — check your internet connection and reload.</div>
+    83→    83→<div id="ui">
+    84→    84→  <div id="title">
+    85→    85→    <div class="logo">NEON VOID</div>
+    86→    86→    <div class="tag">TOP-DOWN NEON ARENA</div>
+    87→    87→    <div class="statline" id="statline"></div>
+    88→    88→    <div class="pills" id="diffPills"></div>
+    89→    89→    <div class="sect">HANGAR — SHIPS</div>
+    90→    90→    <div class="cards" id="shipCards"></div>
+    91→    91→    <div class="sect">UPGRADES</div>
+    92→    92→    <div class="upgs" id="upgRow"></div>
+    93→    93→    <div class="startrow">
+    94→    94→      <label class="toggle"><input type="checkbox" id="afToggle"> AUTO-FIRE</label>
+    95→    95→      <button id="startBtn">ENGAGE</button>
+    96→    96→    </div>
+    97→    97→    <div class="legend">WASD MOVE &nbsp;·&nbsp; MOUSE AIM &nbsp;·&nbsp; HOLD LMB FIRE &nbsp;·&nbsp; F AUTO-FIRE &nbsp;·&nbsp; P PAUSE &nbsp;·&nbsp; M MUTE &nbsp;·&nbsp; R RETRY</div>
+    98→    98→    <div class="shopmsg" id="shopMsg"></div>
+    99→    99→  </div>
+   100→   100→</div>
+   101→   101→<script src="https://cdn.jsdelivr.net/npm/pixi.js@8/dist/pixi.min.js"></script>
+   102→   102→<script src="https://cdn.jsdelivr.net/npm/pixi-filters@6/dist/pixi-filters.min.js"></script>
+   103→   103→<script>
+   104→   104→/* ============================================================
+   105→   105→   NEON VOID v1.0 — full build (single file)
+   106→   106→   Bands map 1:1 to the future src/ split.
+   107→   107→   All tuning lives in CFG. All shapes generated at runtime.
+   108→   108→   ============================================================ */
+   109→   109→(async () => {
+   110→   110→
+   111→   111→function bootFail () {
+   112→   112→  const el = document.getElementById('boot-error');
+   113→   113→  if (el) el.style.display = 'flex';
+   114→   114→}
+   115→   115→if (typeof PIXI === 'undefined') { bootFail(); return; }
+   116→   116→
+   117→   117→/* ===== 00 CONFIG ===== */
+   118→   118→const TAU = Math.PI * 2;
+   119→   119→const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+   120→   120→const lerp  = (a, b, t) => a + (b - a) * t;
+   121→   121→const rand  = (a = 1, b) => b === undefined ? Math.random() * a : a + Math.random() * (b - a);
+   122→   122→const damp  = (rate, dt) => 1 - Math.exp(-rate * dt);
+   123→   123→function lerpAngle (a, b, t) {
+   124→   124→  let d = (b - a) % TAU;
+   125→   125→  if (d >  Math.PI) d -= TAU;
+   126→   126→  if (d < -Math.PI) d += TAU;
+   127→   127→  return a + d * t;
+   128→   128→}
+   129→   129→function lerpColor (c1, c2, t) {
+   130→   130→  const r = ((c1 >> 16 & 255) + ((c2 >> 16 & 255) - (c1 >> 16 & 255)) * t) | 0;
+   131→   131→  const g = ((c1 >> 8 & 255) + ((c2 >> 8 & 255) - (c1 >> 8 & 255)) * t) | 0;
+   132→   132→  const b = ((c1 & 255) + ((c2 & 255) - (c1 & 255)) * t) | 0;
+   133→   133→  return (r << 16 | g << 8 | b) & 0xffffff;
+   134→   134→}
+   135→   135→
+   136→   136→const CFG = {
+   137→   137→  world: { w: 1280, h: 720, bound: 24, spawnInset: 46 },
+   138→   138→
+   139→   139→  colors: {
+   140→   140→    bg:      0x0a0014,   // arena floor
+   141→   141→    bar:     0x05010a,   // letterbox
+   142→   142→    grid:    0x9d5cff,   // faint purple grid
+   143→   143→    border:  0xa44dff,   // arena border
+   144→   144→    player:  0x2cf6ff,   // cyan
+   145→   145→    core:    0xdfffff,   // near-white cores
+   146→   146→    trail:   0xff2ec4,   // pink engine
+   147→   147→    drone:   0xff2b4e, droneHi: 0xffd9de,      // red
+   148→   148→    // hunter colors derive from CFG.enemies.hunter.colorPrimary (Phase 2A — single source)
+   149→   149→    // spinner colors derive from CFG.enemies.spinner.colorPrimary (Phase 2A.2 — single source)
+   150→   150→    tank:    0x3cff6e, tankHi: 0xd6ffe2,       // green
+   151→   151→    coin:    0xffd23c, heart: 0xff4d6d, gunpk: 0x9dff3c,
+   152→   152→    text:    '#eaf6ff',
+   153→   153→    textDim: '#8f7fb8',
+   154→   154→  },
+   155→   155→
+   156→   156→  bloom: { threshold: 0.22, bloomScale: 0.85, brightness: 1.12, blur: 7 },
+   157→   157→
+   158→   158→  // gun tiers 1..5 — single → twin → spread → lance → nova
+   159→   159→  gunTiers: [
+   160→   160→    { name: 'PULSE',  rate: 8.0, count: 1, spread: 0,     parallel: false, speed: 780,  dmg: 1, pierce: 0, life: 1.05, wave: 0,    tex: 'bullet' },
+   161→   161→    { name: 'TWIN',   rate: 8.6, count: 2, spread: 0.05,  parallel: true,  speed: 800,  dmg: 1, pierce: 0, life: 1.05, wave: 0,    tex: 'bullet' },
+   162→   162→    { name: 'SPREAD', rate: 7.2, count: 3, spread: 0.15,  parallel: false, speed: 760,  dmg: 1, pierce: 0, life: 0.9,  wave: 0,    tex: 'bullet' },
+   163→   163→    { name: 'LANCE',  rate: 6.2, count: 1, spread: 0.006, parallel: false, speed: 1150, dmg: 3, pierce: 2, life: 0.85, wave: 0,    tex: 'lance'  },
+   164→   164→    { name: 'NOVA',   rate: 5.6, count: 5, spread: 0.32,  parallel: false, speed: 820,  dmg: 1, pierce: 0, life: 1.0,  wave: 0.55, tex: 'bullet' },
+   165→   165→  ],
+   166→   166→
+   167→   167→  player: {
+   168→   168→    accel: 2600, maxSpeed: 360, drag: 4.2,
+   169→   169→    turnLerp: 18,
+   170→   170→    radius: 9,            // hitbox — deliberately smaller than the sprite
+   171→   171→    hp: 3, iframes: 1.5,
+   172→   172→    bulletSpread: 0.014,
+   173→   173→    wallBounce: 0.45,
+   174→   174→  },
+   175→   175→
+   176→   176→  drone: {
+   177→   177→    radius: 13, hp: 1, hpPerTier: 0,
+   178→   178→    baseSpeed: 62, speedRamp: 0.075, speedCap: 2.5,
+   179→   179→    accel: 300,
+   180→   180→    weaveFreq: 2.1, weaveAmp: 0.55,
+   181→   181→    sepDist: 34, sepForce: 150,
+   182→   182→    spin: 1.3, pulseAmp: 0.09, pulseRate: 3.2,
+   183→   183→    score: 100,
+   184→   184→  },
+   185→   185→  // Phase 2A — HUNTER "stop and time it": approaches to range, plants, draws
+   186→   186→  // the lead line (dim purple -> bright white), fires ONE lead shot at where
+   187→   187→  // you are GOING. Vulnerable the whole wind-up — reading the telegraph is
+   188→   188→  // the reward. Replaces the old orbit + charge hunter (ring/fireMin/fireMax/
+   189→   189→  // charge/predict retired with it).
+   190→   190→  enemies: {
+   191→   191→    hunter: {
+   192→   192→      radius: 17,             // hitbox — 1.3x drone (drone 13); sprite baked to match
+   193→   193→      hp: 2, hpPerTier: 1,    // survives one hit (hpPerTier = existing tier ramp)
+   194→   194→      speed: 90,              // approach speed — x sharedSpeedMult like every enemy
+   195→   195→      accel: 360,             // steering ease (same accel model as drone/tank)
+   196→   196→      score: 250,
+   197→   197→      fireRange: 320,         // plants + winds up once inside this distance
+   198→   198→      windUpMs: 350,          // telegraph duration — THE readability lever
+   199→   199→      cooldownMs: 900,        // stalk time between shots
+   200→   200→      bulletSpeed: 220,       // dodgeable — far slower than player bullets (780+)
+   201→   201→      bulletDamage: 1,
+   202→   202→      leadFactor: 1.0,        // 1.0 = perfect lead; tune down if too punishing
+   203→   203→      aimLineWidth: 1.5,
+   204→   204→      aimLineAlphaStart: 0.25,
+   205→   205→      aimLineAlphaEnd: 1.0,
+   206→   206→      colorPrimary: 0xc000ff, // body / telegraph ring / aim line / kill juice
+   207→   207→      colorBullet: 0xff4080,  // orb + comet trail + muzzle flash
+   208→   208→    },
+   209→   209→
+   210→   210→    // Phase 2A.2 — SPINNER "find the gap": never chases. Drifts lazily, spins
+   211→   211→    // in place, then on a readable rhythm stops, charges (faster spin +
+   212→   212→    // expanding ring), and drops the whole radial ring AT ONCE — then drifts
+   213→   213→    // again. The spray offset rotates half a gap each cycle, so parking in
+   214→   214→    // one safe spot fails. Replaces the v1.0 spiral sprayer (sprayEvery/
+   215→   215→    // sprayDur/coolDur/sprayRot retired with it).
+   216→   216→    spinner: {
+   217→   217→      radius: 11,             // hitbox — slightly smaller than the drone (13); sprite baked to match
+   218→   218→      hp: 3, hpPerTier: 1,    // tankier than a drone, far from tank-tier (hpPerTier = existing tier ramp)
+   219→   219→      speed: 40,              // DRIFT speed — a lazy wander, never a chase (x sharedSpeedMult)
+   220→   220→      accel: 130,             // drift steering ease (v1.0 value kept)
+   221→   221→      score: 400,             // (v1.0 value kept — rich drops stay too)
+   222→   222→      driftTimeMs: 1400,      // DRIFT duration between sprays
+   223→   223→      windUpMs: 500,          // telegraph — THE lever: can you read the pulse?
+   224→   224→      sprayRecoveryMs: 200,   // SPRAY -> DRIFT beat
+   225→   225→      bulletCount: 8,         // 8 bullets, 8 gaps — position BETWEEN them
+   226→   226→      bulletAngleOffset: 0,   // base offset; the per-cycle gap shift is applied internally
+   227→   227→      bulletSpeed: 180,       // slower than hunter orbs (220) — dodge through the gaps
+   228→   228→      bulletDamage: 1,
+   229→   229→      spinRateIdle: 0.4,      // sprite rotations/sec at rest — reads mechanical
+   230→   230→      spinRateWindup: 2.0,    // sprite rotations/sec during the charge
+   231→   231→      chargeRingRadius: 40,   // charge telegraph expands outward to this
+   232→   232→      chargeRingAlpha: 0.7,
+   233→   233→      colorPrimary: 0xffcc00, // body / charge ring / halo / kill juice
+   234→   234→      colorBullet: 0xffaa44,  // yellow-orange orbs
+   235→   235→    },
+   236→   236→  },
+   237→   237→  tank: {
+   238→   238→    radius: 23, hp: 22, hpPerTier: 6,
+   239→   239→    baseSpeed: 34, accel: 95,
+   240→   240→    score: 600, fireCd: 3.3, ringCount: 8, ringSpeed: 150,
+   241→   241→    knock: 1.9,
+   242→   242→  },
+   243→   243→
+   244→   244→  waves: {
+   245→   245→    budget:        w => 3 + w * 1.9 + Math.pow(w, 1.18),
+   246→   246→    spawnInterval: w => Math.max(0.38, 1.25 - w * 0.07),
+   247→   247→    breather: 2.4, telegraph: 0.7, minPlayerDist: 190,
+   248→   248→    unlock: { hunter: 3, spinner: 5, tank: 7 },
+   249→   249→    cost:   { drone: 1, hunter: 3, spinner: 4, tank: 7 },
+   250→   250→    // hunter 0.32 — Phase 2A spawn spec: yields ~1 hunter per 4 drones at
+   251→   251→    // wave 3-4 (weight 0.25 under-delivers once the sub-3-budget tail forces
+   252→   252→    // all-drones picks; 0.32 lands the observed count ratio on ~0.25).
+   253→   253→    // spinner 0.22 — Phase 2A.2 spawn spec: ~1 spinner per 6 drones at wave
+   254→   254→    // 5-6 (same tail-truncation calibration as the hunter weight above).
+   255→   255→    weights:{ drone: 1.0, hunter: 0.32, spinner: 0.22, tank: 0.25 },
+   256→   256→    tierEvery: 5, speedCap: 1.9, maxActive: 26,
+   257→   257→    clearBonus: w => w * 50,
+   258→   258→  },
+   259→   259→
+   260→   260→  drops: {
+   261→   261→    drone:   { coin: 0.14, gun: 0.02, heart: 0.03 },
+   262→   262→    hunter:  { coin: 0.50, gun: 0.07, heart: 0.08 },
+   263→   263→    spinner: { coin: 0.85, gun: 0.12, heart: 0.12 },
+   264→   264→    tank:    { coins: () => 2 + (Math.random() < 0.5 ? 1 : 0), gun: 0.5, heart: 0.5 },
+   265→   265→  },
+   266→   266→
+   267→   267→  pickup: { magnetR: 110, collect: 26, life: 9, pull: 900, pullCap: 520, maxField: 12, coinValue: 5 },
+   268→   268→
+   269→   269→  combo: { window: 2.6, step: 0.1, cap: 5 },
+   270→   270→
+   271→   271→  diff: {
+   272→   272→    easy:   { label: 'EASY',   hpBonus: 1, speed: 0.85, bullet: 0.80, budget: 0.80, iframes: 1.8, mult: 0.8  },
+   273→   273→    normal: { label: 'NORMAL', hpBonus: 0, speed: 1.00, bullet: 1.00, budget: 1.00, iframes: 1.5, mult: 1.0  },
+   274→   274→    hard:   { label: 'HARD',   hpBonus: 0, speed: 1.14, bullet: 1.12, budget: 1.30, iframes: 1.1, mult: 1.35 },
+   275→   275→  },
+   276→   276→
+   277→   277→  ships: {
+   278→   278→    vector: {
+   279→   279→      name: 'VECTOR', cost: 0, flavor: 'BALANCED INTERCEPTOR',
+   280→   280→      accel: 2600, maxSpeed: 360, drag: 4.2, hp: 3, radius: 9, scale: 1.0,
+   281→   281→      color: 0x2cf6ff, trail: 0xff2ec4, pts: [19, 0, -13, -12, -6, 0, -13, 12],
+   282→   282→      stats: 'SPD 360 · HP 3 · HIT 9',
+   283→   283→    },
+   284→   284→    wasp: {
+   285→   285→      name: 'WASP', cost: 300, flavor: 'FAST · FRAGILE FEEL',
+   286→   286→      accel: 3300, maxSpeed: 445, drag: 4.6, hp: 3, radius: 8, scale: 0.9,
+   287→   287→      color: 0x9dff3c, trail: 0x2cf6ff, pts: [21, 0, -15, -9, -5, 0, -15, 9],
+   288→   288→      stats: 'SPD 445 · HP 3 · HIT 8',
+   289→   289→    },
+   290→   290→    juggernaut: {
+   291→   291→      name: 'JUGGERNAUT', cost: 600, flavor: 'HEAVY · EXTRA PLATING',
+   292→   292→      accel: 2200, maxSpeed: 300, drag: 4.0, hp: 4, radius: 11, scale: 1.15,
+   293→   293→      color: 0xffa23c, trail: 0xffe14d, pts: [19, 0, -15, -14, -8, 0, -15, 14],
+   294→   294→      stats: 'SPD 300 · HP 4 · HIT 11',
+   295→   295→    },
+   296→   296→  },
+   297→   297→
+   298→   298→  upgrades: {
+   299→   299→    twin:       { name: 'TWIN CANNON', cost: 250, desc: 'Deploy at gun tier 2 — TWIN' },
+   300→   300→    overcharge: { name: 'OVERCHARGE',   cost: 400, desc: '+18% fire rate, all guns' },
+   301→   301→    magnet:     { name: 'MAGNETIZER',   cost: 300, desc: '+70% pickup magnet radius' },
+   302→   302→  },
+   303→   303→
+   304→   304→  feel: {
+   305→   305→    shakeMax: 16, traumaDecay: 1.7,
+   306→   306→    traumaKill: 0.34, traumaHurt: 0.85, traumaWall: 0.10,
+   307→   307→    hitstopKill: 0.05, hitstopHurt: 0.10,
+   308→   308→    gridPulseKill: 0.55, gridPulseDecay: 2.4,
+   309→   309→    hurtFlash: 0.24,
+   310→   310→    dyingSlowmo: 0.22, dyingTime: 0.85,   // retired by JUICE 5 (superseded by juice.death.slowMo*)
+   311→   311→    rgbHurt: 0.22, rgbMag: 9,
+   312→   312→  },
+   313→   313→
+   314→   314→  // ===== JUICE (Day 1 pass — tune feel by editing numbers only) =====
+   315→   315→  juice: {
+   316→   316→    ship: {
+   317→   317→      // a) engine trail — ghost afterimages of the ship
+   318→   318→      trailLength: 12,      // ring buffer: past positions rendered as ghosts
+   319→   319→      trailFade: 0.30,      // seconds ghosts take to fade in / melt out (bigger = softer, longer-feeling trail)
+   320→   320→      trailAlpha: 0.6,      // freshest ghost alpha (fades to 0 along the tail)
+   321→   321→      trailMinSpeed: 30,    // px/s below which the trail vanishes
+   322→   322→      trailFullAt: 0.5,     // fraction of maxSpeed at which the trail is fully bright
+   323→   323→      // b) banking — lean into lateral velocity (visual only, never affects aim)
+   324→   324→      bankAngle: 18,        // degrees of lean at full lateral speed
+   325→   325→      bankEase: 10,         // ease in/out rate (higher = snappier)
+   326→   326→      // c) thrust pulse — bright flicker at the rear when moving
+   327→   327→      pulseRate: 12,        // Hz — randomized per frame so it never reads as a metronome
+   328→   328→      pulseMinSpeed: 25,    // px/s below which the engine stays dark
+   329→   329→      // d) squash & stretch — along the movement direction, eased
+   330→   330→      squashAmount: { stretch: 1.08, squash: 0.94 },
+   331→   331→      squashEase: 12,       // ease in/out rate for deformation (higher = snappier)
+   332→   332→      stretchFullAt: 0.55,  // fraction of maxSpeed at which deformation reaches full amount
+   333→   333→    },
+   334→   334→
+   335→   335→    // ===== JUICE ITEM 2 — THE KILL MOMENT (all tunables live here) =====
+   336→   336→    kill: {
+   337→   337→      // 1) white flash — enemy sprite renders pure white for exactly this many
+   338→   338→      //    rendered frames BEFORE the burst lands (sells the hit before the pop).
+   339→   339→      //    On 144Hz+ displays raise to 3-4 if the flash reads too fast.
+   340→   340→      whiteFlashFrames: 2,
+   341→   341→      // 2) particle burst — enemy-colored shards, radial, shrink + fade out
+   342→   342→      particleCount: 12,
+   343→   343→      particleSpeedMin: 80,   // px/s
+   344→   344→      particleSpeedMax: 200,  // px/s
+   345→   345→      particleLifetimeMs: 400,
+   346→   346→      // 3) shockwave ring — starts at enemy radius, expands to shockwaveScale x
+   347→   347→      shockwaveScale: 3.0,
+   348→   348→      shockwaveMs: 250,
+   349→   349→      // 4) screen shake — directional jolt per kill, stacks additively, capped
+   350→   350→      shakeAmount: 6,         // px
+   351→   351→      shakeDurationMs: 120,
+   352→   352→      shakeMaxStack: 12,      // px cap so chains stay readable
+   353→   353→      // 5) hit-stop — the ENTIRE loop freezes for this long on every kill
+   354→   354→      hitStopMs: 60,
+   355→   355→      // 6) score popup — floats up popupRise px over popupDurationMs, cyan
+   356→   356→      popupRise: 40,          // px
+   357→   357→      popupDurationMs: 600,
+   358→   358→    },
+   359→   359→
+   360→   360→    // ===== JUICE ITEM 3 — GRID REACTS (all tunables live here) =====
+   361→   361→    grid: {
+   362→   362→      // a) shoot flash — whole-grid brightening on every player shot
+   363→   363→      shootFlashAmount: 0.15, // brightness bump (additive on baseline)
+   364→   364→      shootFlashMs: 80,       // eases back to baseline over this long
+   365→   365→      // b) kill pulse — LOCAL radial grid ripple at the kill point, enemy color
+   366→   366→      killPulseRadius: 120,   // px the ripple expands to
+   367→   367→      killPulseMs: 200,       // expansion time
+   368→   368→      killPulseAlpha: 0.6,    // starting alpha, fades linearly to 0
+   369→   369→      // c) breathing idle — no enemies: slow sine between the two levels
+   370→   370→      breathMin: 0.6,
+   371→   371→      breathMax: 0.8,
+   372→   372→      breathPeriodMs: 3000,
+   373→   373→      // d) combat intensity — baseline scales with enemy count, eased
+   374→   374→      //    target = intensityBase + min(intensityMax - intensityBase, count * intensityScale)
+   375→   375→      intensityBase: 0.5,
+   376→   376→      intensityScale: 0.02,   // per enemy
+   377→   377→      intensityMax: 0.9,      // baseline cap (reached at 20 enemies with defaults)
+   378→   378→      intensityEaseMs: 500,   // ease toward target, no snapping on spawn/death
+   379→   379→    },
+   380→   380→
+   381→   381→    // ===== JUICE ITEM 4 — BULLET FEEL (all tunables live here) =====
+   382→   382→    bullet: {
+   383→   383→      // a) muzzle flash — one soft white flicker at the barrel per trigger pull
+   384→   384→      muzzleFlashFrames: 3,   // rendered frames, frame-exact (same clock as the kill flash)
+   385→   385→      muzzleFlashAlpha: 0.8,  // flicker, not firework — keep <= 0.9
+   386→   386→      // b) trail — streak bake: bright head + tapered fading cyan tail
+   387→   387→      trailLength: 10,        // px of tail behind the head (read at boot bake)
+   388→   388→      trailCoreAlpha: 0.9,    // thin white center line alpha at the head
+   389→   389→      trailFadeAlpha: 0.5,    // cyan body alpha at the tail end
+   390→   390→      // streak taper — FULL widths in px (Item 4 tune request: was bake-internal
+   391→   391→      // 5.2 / 2.2). Bake reads at boot — edit, reload, the streak follows.
+   392→   392→      headWidth: 5.2,         // head full width
+   393→   393→      tailWidth: 2.2,         // tail full width at the fading end
+   394→   394→      // c) impact spark — white shards on non-lethal hits ("hitting" vs "killed")
+   395→   395→      impactParticleCount: 3,
+   396→   396→      impactParticleLifetimeMs: 150,
+   397→   397→      // d) recoil — visual-only nudge, sprite offset (never touches position/aim/spawn)
+   398→   398→      recoilPx: 2,
+   399→   399→      recoilMs: 60,
+   400→   400→    },
+   401→   401→
+   402→   402→    // ===== JUICE ITEM 5 — DEATH & RESTART (all tunables live here) =====
+   403→   403→    death: {
+   404→   404→      // a) the death beat — its own moment: slow-mo + cyan detonation + red
+   405→   405→      //    edge vignette. NO hit-stop, NO kill juice; the death sound fires
+   406→   406→      //    HERE (HP <= 0), not on the GAME OVER slam.
+   407→   407→      slowMoScale: 0.3,       // game-time scale during the beat (real-time clock keeps running)
+   408→   408→      slowMoMs: 500,          // real-time duration before GAME OVER slams in
+   409→   409→      explosionCount: 25,     // pooled particles (spec band 20-30)
+   410→   410→      explosionSpeedMin: 40,  // px/s — deliberately slower + bigger than kill shards
+   411→   411→      explosionSpeedMax: 140,
+   412→   412→      vignetteAlpha: 0.6,     // red screen-edge flash peak (sprite alpha)
+   413→   413→      vignetteMs: 140,        // linear decay to 0
+   414→   414→      // b) game over screen
+   415→   415→      gameOverShake: 14,      // px — the ONLY big shake in the game (slam impact)
+   416→   416→      gameOverSlamMs: 140,    // GAME OVER drop-in from above
+   417→   417→      scoreCountupMs: 400,    // 0 -> final, real time, ease-out
+   418→   418→      newBestFlashMs: 900,    // gold pulse window before it holds solid
+   419→   419→      newBestPulseCount: 3,
+   420→   420→      pressRPulseMs: 1500,    // PRESS R alpha 0.5 <-> 1.0 sine
+   421→   421→      // c) restart — a band travels across, never a fade
+   422→   422→      restartWipeMs: 100,     // sweep per half (cover / reveal)
+   423→   423→      restartFadeInMs: 100,   // ship fade-in from black (the only fade-in in the game)
+   424→   424→    },
+   425→   425→  },
+   426→   426→
+   427→   427→  pools: { bullets: 120, ebullets: 170, particles: 460, rings: 26, ghosts: 18,
+   428→   428→           popups: 20, teles: 14, enemies: 44, pickups: 26, ripples: 14, muzzles: 8 },
+   429→   429→
+   430→   430→  audio: {
+   431→   431→    master: 0.5,
+   432→   432→    shoot: { type: 'square',   f0: 840, fMul: 0.72, dur: 0.07, vol: 0.075 },
+   433→   433→    kill:  { noise: { dur: 0.26, vol: 0.34, lp0: 3200, lp1: 160 },
+   434→   434→             tone: { type: 'triangle', f0: 210, f1: 42, dur: 0.30, vol: 0.22 } },
+   435→   435→    hurt:  { tone: { type: 'sawtooth', f0: 150, f1: 46, dur: 0.22, vol: 0.38 },
+   436→   436→             noise: { dur: 0.12, vol: 0.18, lp0: 700, lp1: 180 } },
+   437→   437→    coin:  { tones: [ { type: 'sine', f0: 1046, f1: 1046, dur: 0.07, vol: 0.14, at: 0 },
+   438→   438→                      { type: 'sine', f0: 1568, f1: 1568, dur: 0.10, vol: 0.14, at: 0.07 } ] },
+   439→   439→    gun:   { tone: { type: 'square', f0: 260, f1: 920, dur: 0.22, vol: 0.2 },
+   440→   440→             noise: { dur: 0.1, vol: 0.1, lp0: 2400, lp1: 900 } },
+   441→   441→    heal:  { tones: [ { type: 'sine', f0: 660, f1: 660, dur: 0.09, vol: 0.15, at: 0 },
+   442→   442→                      { type: 'sine', f0: 990, f1: 990, dur: 0.12, vol: 0.15, at: 0.08 } ] },
+   443→   443→    ui:    { tone: { type: 'square', f0: 1700, f1: 1150, dur: 0.05, vol: 0.05 } },
+   444→   444→    boom:  { noise: { dur: 0.5, vol: 0.5, lp0: 1400, lp1: 90 },
+   445→   445→             tone: { type: 'sine', f0: 95, f1: 28, dur: 0.45, vol: 0.4 } },
+   446→   446→    tier:  { tones: [ { type: 'square', f0: 220, f1: 220, dur: 0.12, vol: 0.16, at: 0 },
+   447→   447→                      { type: 'square', f0: 330, f1: 330, dur: 0.14, vol: 0.16, at: 0.14 } ] },
+   448→   448→  },
+   449→   449→};
+   450→   450→const W = CFG.world.w, H = CFG.world.h;
+   451→   451→const COL = CFG.colors;
+   452→   452→// Phase 2A — hunter palette is owned by CFG.enemies.hunter (no duplicate keys)
+   453→   453→COL.hunter = CFG.enemies.hunter.colorPrimary;
+   454→   454→COL.hunterHi = lerpColor(CFG.enemies.hunter.colorPrimary, 0xffffff, 0.72);
+   455→   455→// Phase 2A.2 — spinner palette owned by CFG.enemies.spinner (single source)
+   456→   456→COL.spinner = CFG.enemies.spinner.colorPrimary;
+   457→   457→COL.spinnerHi = lerpColor(CFG.enemies.spinner.colorPrimary, 0xffffff, 0.72);
+   458→   458→
+   459→   459→/* ===== 10b META — persistent profile (localStorage) ===== */
+   460→   460→const META_DEFAULTS = {
+   461→   461→  coins: 0, best: 0,
+   462→   462→  ship: 'vector', owned: ['vector'],
+   463→   463→  upg: {},                 // { twin:true, overcharge:true, magnet:true }
+   464→   464→  diff: 'normal', autoFire: false, muted: false,
+   465→   465→};
+   466→   466→function loadMeta () {
+   467→   467→  const m = Object.assign({}, META_DEFAULTS, { owned: ['vector'], upg: {} });
+   468→   468→  try {
+   469→   469→    const raw = localStorage.getItem('neonvoid_save');
+   470→   470→    if (raw) {
+   471→   471→      const j = JSON.parse(raw);
+   472→   472→      Object.assign(m, j);
+   473→   473→      if (!Array.isArray(m.owned) || !m.owned.includes('vector')) {
+   474→   474→        m.owned = (m.owned && m.owned.includes('vector')) ? m.owned : ['vector'].concat(Array.isArray(m.owned) ? m.owned : []);
+   475→   475→      }
+   476→   476→      if (!m.upg || typeof m.upg !== 'object') m.upg = {};
+   477→   477→      if (!CFG.diff[m.diff]) m.diff = 'normal';
+   478→   478→      if (!CFG.ships[m.ship]) m.ship = 'vector';
+   479→   479→    } else {
+   480→   480→      // migrate the v0.1 best score if present
+   481→   481→      const old = parseInt(localStorage.getItem('neonvoid_best') || '0', 10) || 0;
+   482→   482→      if (old > 0) m.best = old;
+   483→   483→    }
+   484→   484→  } catch (e) { /* corrupted save — play with defaults */ }
+   485→   485→  return m;
+   486→   486→}
+   487→   487→const META = loadMeta();
+   488→   488→function saveMeta () {
+   489→   489→  try { localStorage.setItem('neonvoid_save', JSON.stringify(META)); } catch (e) {}
+   490→   490→}
+   491→   491→const DIFF = () => CFG.diff[META.diff];
+   492→   492→
+   493→   493→/* ===== 01 CORE — boot, renderer, layers ===== */
+   494→   494→const app = new PIXI.Application();
+   495→   495→await app.init({
+   496→   496→  width: window.innerWidth, height: window.innerHeight,
+   497→   497→  background: COL.bar, antialias: true,
+   498→   498→  resolution: Math.min(window.devicePixelRatio || 1, 2),
+   499→   499→  autoDensity: true, powerPreference: 'high-performance',
+   500→   500→});
+   501→   501→document.body.appendChild(app.canvas);
+   502→   502→
+   503→   503→// Best-effort font load (don't block forever if offline)
+   504→   504→try {
+   505→   505→  await Promise.race([
+   506→   506→    Promise.all([
+   507→   507→      document.fonts.load('900 72px Orbitron'),
+   508→   508→      document.fonts.load('700 20px Orbitron'),
+   509→   509→      document.fonts.load('500 16px Orbitron'),
+   510→   510→    ]),
+   511→   511→    new Promise(r => setTimeout(r, 1800)),
+   512→   512→  ]);
+   513→   513→} catch (e) { /* fallback font is fine */ }
+   514→   514→
+   515→   515→// Filters — bloom is the whole aesthetic; RGB split is the hurt kick.
+   516→   516→const FXNS = (PIXI.filters && PIXI.filters.AdvancedBloomFilter) ? PIXI.filters : PIXI;
+   517→   517→const AdvancedBloomFilter = FXNS.AdvancedBloomFilter;
+   518→   518→const RGBSplitFilter = FXNS.RGBSplitFilter;
+   519→   519→
+   520→   520→// Layer tree:
+   521→   521→// stage
+   522→   522→// ├ worldRoot (letterbox transform + shake)
+   523→   523→// │   └ glow [bloom (+rgbSplit on hit)] └ crisp (HUD, no bloom)
+   524→   524→// ├ overlayRoot (letterbox transform, no shake)
+   525→   525→// └ flashRect (fullscreen damage flash)
+   526→   526→const worldRoot = new PIXI.Container();
+   527→   527→const overlayRoot = new PIXI.Container();
+   528→   528→const glow = new PIXI.Container();
+   529→   529→const crisp = new PIXI.Container();
+   530→   530→const glowFilters = [];
+   531→   531→if (AdvancedBloomFilter) glowFilters.push(new AdvancedBloomFilter(CFG.bloom));
+   532→   532→let rgbF = null;
+   533→   533→if (RGBSplitFilter) {
+   534→   534→  // v6 wants an options object; positional args are deprecated
+   535→   535→  rgbF = new RGBSplitFilter({ red: [0, 0], green: [0, 0], blue: [0, 0] });
+   536→   536→  glowFilters.push(rgbF);
+   537→   537→}
+   538→   538→if (glowFilters.length) glow.filters = glowFilters;
+   539→   539→else console.warn('[NeonVoid] pixi-filters not found — running on layered-stroke glow only.');
+   540→   540→worldRoot.addChild(glow, crisp);
+   541→   541→app.stage.addChild(worldRoot, overlayRoot);
+   542→   542→
+   543→   543→// Arena floor (slightly lighter than the letterbox bars so the play space reads instantly)
+   544→   544→const floor = new PIXI.Graphics()
+   545→   545→  .rect(0, 0, W, H)
+   546→   546→  .fill({ color: COL.bg, alpha: 1 });
+   547→   547→glow.addChild(floor);
+   548→   548→
+   549→   549→const fxL      = new PIXI.Container();  // particles, rings, ghosts, telegraphs
+   550→   550→const enemyL   = new PIXI.Container();
+   551→   551→const pickupL  = new PIXI.Container();
+   552→   552→const bulletL  = new PIXI.Container();
+   553→   553→const popupL   = new PIXI.Container();
+   554→   554→glow.addChild(fxL, enemyL, pickupL, bulletL, popupL);
+   555→   555→
+   556→   556→const flashRect = new PIXI.Graphics()
+   557→   557→  .rect(0, 0, window.innerWidth, window.innerHeight)
+   558→   558→  .fill({ color: 0xffffff, alpha: 1 });
+   559→   559→flashRect.alpha = 0;
+   560→   560→app.stage.addChild(flashRect);
+   561→   561→
+   562→   562→// Global "feel" state
+   563→   563→const S = {
+   564→   564→  mode: 'boot',           // boot | title | playing | dying | over | paused
+   565→   565→  time: 0,
+   566→   566→  score: 0, best: META.best, bestBeaten: false, kills: 0,
+   567→   567→  wave: 0, tier: 1, runCoins: 0,
+   568→   568→  combo: 0, comboT: 0,
+   569→   569→  gun: 1,
+   570→   570→  timescale: 1, hitstop: 0,
+   571→   571→  trauma: 0, shakeX: 0, shakeY: 0,
+   572→   572→  kMag: 0, kT: 0, kDur: 0, kAng: 0, kx: 0, ky: 0,   // JUICE 2.4 — additive kill shake
+   573→   573→  gridBase: 0.7, gridShoot: 0,                       // JUICE 3 — grid brightness state
+   574→   574→  aimLines: 0,                                       // Phase 2A — live windup aim lines (verify hook)
+   575→   575→  spinnerRings: 0,                                   // Phase 2A.2 — live windup charge rings (verify hook)
+   576→   576→  gridPulse: 0, flashA: 0, rgbT: 0,
+   577→   577→  dyingT: 0,
+   578→   578→  // JUICE 5 — death beat + over-screen animators + restart wipe (real-time clocks)
+   579→   579→  vigA: 0,                     // red vignette sprite alpha
+   580→   580→  shipFade: 1,                 // multiplied into ship/reticle alpha (restart fade-in)
+   581→   581→  countT: 0, countTo: 0,       // score countup
+   582→   582→  nbT: 0, promptT: 0,          // NEW BEST pulse / PRESS R pulse
+   583→   583→  slamT: 0, slamDur: 0.14, slamHit: false,   // GAME OVER slam
+   584→   584→};
+   585→   585→
+   586→   586→function resize () {
+   587→   587→  const vw = window.innerWidth, vh = window.innerHeight;
+   588→   588→  app.renderer.resize(vw, vh);
+   589→   589→  const s = Math.min(vw / W, vh / H);
+   590→   590→  scaleS = s; offX = (vw - W * s) / 2; offY = (vh - H * s) / 2;
+   591→   591→  viewW = vw; viewH = vh;
+   592→   592→  worldRoot.position.set(offX, offY);   worldRoot.scale.set(s);
+   593→   593→  overlayRoot.position.set(offX, offY); overlayRoot.scale.set(s);
+   594→   594→  flashRect.clear().rect(0, 0, vw, vh).fill({ color: 0xffffff, alpha: 1 });
+   595→   595→  flashRect.alpha = S.flashA;
+   596→   596→  const ui = document.getElementById('ui');
+   597→   597→  if (ui) {
+   598→   598→    ui.style.left = offX + 'px';
+   599→   599→    ui.style.top = offY + 'px';
+   600→   600→    ui.style.width = W + 'px';
+   601→   601→    ui.style.height = H + 'px';
+   602→   602→    ui.style.transform = 'scale(' + s + ')';
+   603→   603→  }
+   604→   604→}
+   605→   605→let scaleS = 1, offX = 0, offY = 0, viewW = 0, viewH = 0;
+   606→   606→window.addEventListener('resize', resize);
+   607→   607→
+   608→   608→/* ===== 02 FX — grid, border, shake, hit-stop, RGB hurt, reticle ===== */
+   609→   609→
+   610→   610→// Background grid — drawn ONCE, pulsing via container alpha (zero per-frame cost)
+   611→   611→const gridG = new PIXI.Graphics();
+   612→   612→for (let x = 64; x < W; x += 64) {
+   613→   613→  const major = (x / 64) % 4 === 0;
+   614→   614→  gridG.moveTo(x, 0).lineTo(x, H).stroke({ width: 1, color: COL.grid, alpha: major ? 0.15 : 0.08 });
+   615→   615→}
+   616→   616→for (let y = 64; y < H; y += 64) {
+   617→   617→  const major = (y / 64) % 4 === 0;
+   618→   618→  gridG.moveTo(0, y).lineTo(W, y).stroke({ width: 1, color: COL.grid, alpha: major ? 0.15 : 0.08 });
+   619→   619→}
+   620→   620→const gridC = new PIXI.Container();
+   621→   621→gridC.addChild(gridG);
+   622→   622→glow.addChildAt(gridC, 1); // above floor, below everything else
+   623→   623→
+   624→   624→// Arena border — glowing purple rectangle + Tron corner brackets
+   625→   625→const borderG = new PIXI.Graphics();
+   626→   626→borderG.rect(4, 4, W - 8, H - 8).stroke({ width: 6, color: COL.border, alpha: 0.14 });
+   627→   627→borderG.rect(4, 4, W - 8, H - 8).stroke({ width: 2, color: COL.border, alpha: 0.75 });
+   628→   628→const CL = 34; // corner bracket length
+   629→   629→[[6, 6, 1, 1], [W - 6, 6, -1, 1], [6, H - 6, 1, -1], [W - 6, H - 6, -1, -1]].forEach(([cx, cy, dx, dy]) => {
+   630→   630→  borderG.moveTo(cx, cy + dy * CL).lineTo(cx, cy).lineTo(cx + dx * CL, cy)
+   631→   631→    .stroke({ width: 3.5, color: 0xd8b4ff, alpha: 0.9 });
+   632→   632→});
+   633→   633→const borderC = new PIXI.Container();
+   634→   634→borderC.addChild(borderG);
+   635→   635→glow.addChild(borderC);
+   636→   636→
+   637→   637→function fxUpdate (dt, rawDt) {
+   638→   638→  // JUICE ITEM 3 — the grid reads its brightness from CFG.juice.grid:
+   639→   639→  //   baseline = max(breathing idle (c), combat intensity (d)) — user-tuned:
+   640→   640→  //   combat can raise the floor but must never dim the grid below idle.
+   641→   641→  //   Eased, never snaps. The whole-grid shoot flash (a) stacks on top.
+   642→   642→  //   The kill pulse (b) is local (see band 03).
+   643→   643→  const KG = CFG.juice.grid;
+   644→   644→  const ph = 0.5 + 0.5 * Math.sin(TAU * S.time * 1000 / KG.breathPeriodMs);
+   645→   645→  const breath = KG.breathMin + (KG.breathMax - KG.breathMin) * ph;
+   646→   646→  if (S.mode === 'over') {
+   647→   647→    // JUICE 5b — the arena holds its breath on the game-over screen: baseline
+   648→   648→    // frozen (no breathing, no combat response), only the shoot flash decays.
+   649→   649→  } else {
+   650→   650→    let nEnemies = 0;
+   651→   651→    for (const e of enemyPool.items) if (e.active && !e.dying) nEnemies++;
+   652→   652→    let gTarget = breath;                          // idle floor = breathing sine
+   653→   653→    if (nEnemies > 0) {
+   654→   654→      const combat = KG.intensityBase + Math.min(KG.intensityMax - KG.intensityBase, nEnemies * KG.intensityScale);
+   655→   655→      gTarget = Math.max(breath, combat);          // combat never dims below idle
+   656→   656→    }
+   657→   657→    S.gridBase += (gTarget - S.gridBase) * damp(3 / (KG.intensityEaseMs / 1000), rawDt);
+   658→   658→  }
+   659→   659→  S.gridShoot = Math.max(0, S.gridShoot - (KG.shootFlashAmount / (KG.shootFlashMs / 1000)) * rawDt);
+   660→   660→  gridC.alpha = clamp(S.gridBase + S.gridShoot, 0, 1.6);
+   661→   661→  borderC.alpha = 0.78 + 0.22 * Math.sin(S.time * 2.1);
+   662→   662→
+   663→   663→  // trauma → shake (decays in real time so shake survives hit-stop)
+   664→   664→  S.trauma = Math.max(0, S.trauma - CFG.feel.traumaDecay * rawDt);
+   665→   665→  const mag = S.trauma * S.trauma * CFG.feel.shakeMax;
+   666→   666→  S.shakeX = (Math.random() * 2 - 1) * mag;
+   667→   667→  S.shakeY = (Math.random() * 2 - 1) * mag * 0.85;
+   668→   668→
+   669→   669→  // JUICE 2.4 — additive kill shake: fixed random direction per kill, ease-out
+   670→   670→  // decay, stacks to shakeMaxStack. Ticks on rawDt so the jolt keeps playing
+   671→   671→  // through the hit-stop freeze (feedback survives, gameplay freezes).
+   672→   672→  if (S.kMag > 0) {
+   673→   673→    S.kT += rawDt;
+   674→   674→    const kk = S.kT / S.kDur;
+   675→   675→    if (kk >= 1) { S.kMag = 0; S.kx = 0; S.ky = 0; }
+   676→   676→    else {
+   677→   677→      const km = S.kMag * (1 - kk) * (1 - kk);
+   678→   678→      S.kx = Math.cos(S.kAng) * km;
+   679→   679→      S.ky = Math.sin(S.kAng) * km;
+   680→   680→    }
+   681→   681→  }
+   682→   682→  worldRoot.position.set(offX + S.shakeX + S.kx, offY + S.shakeY + S.ky);
+   683→   683→  worldRoot.rotation = ((Math.random() * 2 - 1) * mag) * 0.0012;
+   684→   684→
+   685→   685→  // fullscreen damage flash
+   686→   686→  S.flashA = Math.max(0, S.flashA - 3.5 * rawDt);
+   687→   687→  flashRect.alpha = S.flashA;
+   688→   688→
+   689→   689→  // RGB split — hurt chromatic aberration, decays fast
+   690→   690→  if (rgbF) {
+   691→   691→    S.rgbT = Math.max(0, S.rgbT - rawDt);
+   692→   692→    const k = (S.rgbT / CFG.feel.rgbHurt) * CFG.feel.rgbMag;
+   693→   693→    rgbF.red = [k, 0];
+   694→   694→    rgbF.green = [0, k * 0.6];
+   695→   695→    rgbF.blue = [-k * 0.5, 0];
+   696→   696→  }
+   697→   697→
+   698→   698→  // JUICE 5a — red edge vignette decays linearly over vignetteMs (real time)
+   699→   699→  const DKv = CFG.juice.death;
+   700→   700→  S.vigA = Math.max(0, S.vigA - (DKv.vignetteAlpha / Math.max(0.001, DKv.vignetteMs / 1000)) * rawDt);
+   701→   701→  vignetteSpr.alpha = S.vigA;
+   702→   702→}
+   703→   703→function addTrauma (v) { S.trauma = clamp(S.trauma + v, 0, 1); }
+   704→   704→function hitstop (t)   { S.hitstop = Math.max(S.hitstop, t); }
+   705→   705→// JUICE 2.4 — per-kill directional jolt (shakeAmount px / shakeDurationMs ease-out,
+   706→   706→// stacks additively, capped at shakeMaxStack so chains don't become noise)
+   707→   707→function addKillShake () {
+   708→   708→  const KB = CFG.juice.kill;
+   709→   709→  S.kMag = Math.min(S.kMag + KB.shakeAmount, KB.shakeMaxStack);
+   710→   710→  S.kT = 0;
+   711→   711→  S.kDur = Math.max(1, KB.shakeDurationMs) / 1000;
+   712→   712→  S.kAng = rand(TAU);                       // fresh random direction per kill
+   713→   713→}
+   714→   714→// JUICE 3a — whole-grid power pulse on every player shot (refreshes, eases
+   715→   715→// back over shootFlashMs). Independent from the local kill ripple — both show.
+   716→   716→function gridShootFlash () {
+   717→   717→  S.gridShoot = CFG.juice.grid.shootFlashAmount;
+   718→   718→}
+   719→   719→// JUICE 5a — red screen-edge vignette on player death. Sprite alpha snaps to
+   720→   720→// vignetteAlpha and decays linearly to 0 over vignetteMs (decay in fxUpdate).
+   721→   721→function vignetteFlash () {
+   722→   722→  S.vigA = CFG.juice.death.vignetteAlpha;
+   723→   723→  vignetteSpr.alpha = S.vigA;
+   724→   724→}
+   725→   725→// JUICE 5b — GAME OVER slam impact: the ONLY big shake in the game (14px).
+   726→   726→// Rides the same additive channel as the kill shake but OVERWRITES it — this
+   727→   727→// beat owns the screen. Straight down with a touch of jitter: the text lands
+   728→   728→// from above, so the world jolts downward.
+   729→   729→function addSlamShake () {
+
+[showing lines 30-729 of 1402; use offset=730 with limit to continue reading]

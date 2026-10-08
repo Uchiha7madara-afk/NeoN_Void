@@ -1,0 +1,364 @@
+
+/* ===== 06 ENEMIES — drone / hunter / spinner / tank ===== */
+const EKIND = {
+  drone:   { cfg: CFG.drone,   tex: 'drone',   color: COL.drone,   hi: COL.droneHi   },
+  hunter:  { cfg: CFG.hunter,  tex: 'hunter',  color: COL.hunter,  hi: COL.hunterHi  },
+  spinner: { cfg: CFG.spinner, tex: 'spinner', color: COL.spinner, hi: COL.spinnerHi },
+  tank:    { cfg: CFG.tank,    tex: 'tank',    color: COL.tank,    hi: COL.tankHi    },
+};
+const enemyPool = makePool(CFG.pools.enemies, () => spriteOf(TEX.drone), enemyL);
+const telePool = makePool(CFG.pools.teles, () => spriteOf(TEX.ring), fxL); // spawn telegraphs
+
+function tierOf (wave) { return 1 + Math.floor((wave - 1) / CFG.waves.tierEvery); }
+function enemyHp (kind, tier) {
+  const c = EKIND[kind].cfg;
+  return c.hp + (tier - 1) * (c.hpPerTier || 0);
+}
+function sharedSpeedMult () {
+  return Math.min(CFG.waves.speedCap, 1 + (S.wave - 1) * 0.055 + (S.tier - 1) * 0.05) * DIFF().speed;
+}
+
+function spawnPoint () {
+  const I = CFG.world.spawnInset, depth = 90;
+  for (let tries = 0; tries < 14; tries++) {
+    let x, y;
+    const edge = (Math.random() * 4) | 0;
+    if (edge === 0)      { x = rand(I, W - I); y = I + rand(depth); }
+    else if (edge === 1) { x = rand(I, W - I); y = H - I - rand(depth); }
+    else if (edge === 2) { x = I + rand(depth);        y = rand(I, H - I); }
+    else                 { x = W - I - rand(depth);    y = rand(I, H - I); }
+    if (Math.hypot(x - player.x, y - player.y) >= CFG.waves.minPlayerDist) return { x, y };
+  }
+  return { x: I + rand(40), y: I + rand(40) };
+}
+
+function telegraphSpawn (kind) {
+  const t = telePool.get();
+  if (!t) return false;
+  const p = spawnPoint();
+  t.texture = TEX.ring; t.tint = EKIND[kind].color;
+  t.x = p.x; t.y = p.y;
+  t.t = CFG.waves.telegraph; t.dur = CFG.waves.telegraph;
+  t.x0 = p.x; t.y0 = p.y; t.kind = kind;
+  t.alpha = 0.9; t.scale.set(1.1);
+  return true;
+}
+
+function updateTeles (dt) {
+  for (const t of telePool.items) {
+    if (!t.active) continue;
+    t.t -= dt;
+    const k = clamp(t.t / t.dur, 0, 1);
+    t.scale.set(lerp(0.28, 1.1, k));
+    t.alpha = 0.35 + 0.65 * (1 - k) + 0.25 * Math.sin(S.time * 24);
+    if (t.t <= 0) {
+      telePool.release(t);
+      spawnEnemy(t.kind, t.x0, t.y0);
+    }
+  }
+}
+
+function spawnEnemy (kind, x, y) {
+  const d = enemyPool.get();
+  if (!d) return;
+  const K = EKIND[kind], c = K.cfg;
+  d.kind = kind; d.cfg = c; d.k = K;
+  d.x = x; d.y = y;
+  d.vx = 0; d.vy = 0;
+  d.hp = enemyHp(kind, S.tier);
+  d.radius = c.radius;
+  d.phase = rand(TAU);
+  d.rotA = rand(TAU);
+  d.flashT = 0;
+  d.spawnK = 0;
+  d.scale.set(0.1);
+  d.orb = Math.random() < 0.5 ? 1 : -1;      // hunter strafe dir
+  d.fireT = rand(c.fireMin || 1, c.fireMax || 2); // hunter
+  d.cool = rand(0.8, 1.6);                   // spinner / tank cycle
+  d.sprayT = 0; d.emitCd = 0; d.sprA = rand(TAU);
+  d.ax = rand(W * 0.25, W * 0.75); d.ay = rand(H * 0.25, H * 0.75); // spinner anchor
+  d.texN = K.tex;
+  d.texture = TEX[K.tex];
+  puff(x, y, 6, K.color, 120);
+  ring(x, y, K.color, 1.1, 0.3);
+}
+
+// --- enemy bullets ---
+const ebPool = makePool(CFG.pools.ebullets, () => spriteOf(TEX.ebullet), bulletL);
+function fireEnemyBullet (x, y, ang, speed, tint) {
+  const b = ebPool.get();
+  if (!b) return;
+  b.x = x; b.y = y;
+  const sp = speed * DIFF().bullet;
+  b.vx = Math.cos(ang) * sp; b.vy = Math.sin(ang) * sp;
+  b.life = 7;
+  b.tint = tint;
+  b.scale.set(1);
+  b.rotation = 0;
+}
+
+function updateEBullets (dt) {
+  for (const b of ebPool.items) {
+    if (!b.active) continue;
+    b.life -= dt;
+    if (b.life <= 0 || b.x < 8 || b.x > W - 8 || b.y < 8 || b.y > H - 8) {
+      ebPool.release(b); continue;
+    }
+    b.x += b.vx * dt; b.y += b.vy * dt;
+    // player collision
+    if (player.alive && S.mode === 'playing' && player.iframes <= 0) {
+      const rr = 4.5 + player.ship.radius;
+      if (Math.abs(b.x - player.x) < rr && Math.abs(b.y - player.y) < rr &&
+          Math.hypot(b.x - player.x, b.y - player.y) < rr) {
+        ebPool.release(b);
+        playerHit(player.x - b.x, player.y - b.y);
+        continue;
+      }
+    }
+  }
+}
+
+// --- per-kind AI ---
+function updateEnemies (dt) {
+  const chasing = player.alive && S.mode === 'playing';
+  const actives = [];
+  for (const d of enemyPool.items) if (d.active) actives.push(d);
+
+  for (const d of actives) {
+    d.flashT = Math.max(0, d.flashT - dt);
+    d.spawnK = Math.min(1, d.spawnK + dt * 4.5);
+    const c = d.cfg;
+
+    if (d.kind === 'drone') {
+      d.rotA += c.spin * dt;
+      if (chasing) {
+        const dx = player.x - d.x, dy = player.y - d.y;
+        const wob = Math.sin(S.time * c.weaveFreq + d.phase) * c.weaveAmp;
+        const ang = Math.atan2(dy, dx) + wob;
+        const ms = c.baseSpeed * Math.min(c.speedCap, 1 + (S.wave - 1) * c.speedRamp) * DIFF().speed;
+        const dvx = Math.cos(ang) * ms - d.vx, dvy = Math.sin(ang) * ms - d.vy;
+        const dl = Math.hypot(dvx, dvy) || 1;
+        const st = Math.min(c.accel * dt, dl);
+        d.vx += (dvx / dl) * st; d.vy += (dvy / dl) * st;
+        // separation — keeps the swarm readable instead of one blob
+        for (const o of actives) {
+          if (o === d || o.kind !== 'drone') continue;
+          const sx = d.x - o.x, sy = d.y - o.y;
+          const sd = Math.hypot(sx, sy);
+          if (sd > 0.01 && sd < c.sepDist) {
+            d.vx += (sx / sd) * c.sepForce * dt;
+            d.vy += (sy / sd) * c.sepForce * dt;
+          }
+        }
+      } else { d.vx *= Math.exp(-0.8 * dt); d.vy *= Math.exp(-0.8 * dt); }
+      d.texture = d.flashT > 0 ? TEX.droneW : TEX.drone;
+      d.rotation = d.rotA;
+      const pulse = 1 + Math.sin(S.time * c.pulseRate + d.phase) * c.pulseAmp;
+      const popIn = 1 - Math.pow(1 - d.spawnK, 3);
+      d.scale.set(popIn * pulse * (d.spawnK < 1 ? 1.15 : 1));
+    }
+
+    else if (d.kind === 'hunter') {
+      if (chasing) {
+        const dx = player.x - d.x, dy = player.y - d.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const ms = c.baseSpeed * sharedSpeedMult();
+        let tx, ty;
+        if (dist > c.ring + c.ringSlack)      { tx = dx / dist; ty = dy / dist; }
+        else if (dist < c.ring - c.ringSlack) { tx = -dx / dist; ty = -dy / dist; }
+        else { tx = (-dy / dist) * d.orb; ty = (dx / dist) * d.orb; }
+        const dvx = tx * ms - d.vx, dvy = ty * ms - d.vy;
+        const dl = Math.hypot(dvx, dvy) || 1;
+        const st = Math.min(c.accel * dt, dl);
+        d.vx += (dvx / dl) * st; d.vy += (dvy / dl) * st;
+
+        // fire cycle: charge telegraph → predictive shot
+        d.fireT -= dt;
+        if (d.fireT <= 0 && d.spawnK >= 1) {
+          const predict = Math.min(0.95, c.predict + S.wave * 0.02);
+          const tof = dist / (c.bulletSpeed * DIFF().bullet);
+          const aim = Math.atan2(dy + player.vy * tof * predict, dx + player.vx * tof * predict);
+          if (S.tier >= 2 && Math.random() < 0.4) {
+            fireEnemyBullet(d.x, d.y, aim - 0.18, c.bulletSpeed, d.k.color);
+            fireEnemyBullet(d.x, d.y, aim,          c.bulletSpeed, d.k.color);
+            fireEnemyBullet(d.x, d.y, aim + 0.18, c.bulletSpeed, d.k.color);
+          } else {
+            fireEnemyBullet(d.x, d.y, aim, c.bulletSpeed, d.k.color);
+          }
+          puff(d.x, d.y, 3, d.k.hi, 60);
+          A.ui();
+          d.fireT = rand(c.fireMin, c.fireMax) / Math.min(1.4, 1 + (S.tier - 1) * 0.12);
+        }
+        d.rotation = Math.atan2(dy, dx);
+      } else { d.vx *= Math.exp(-0.8 * dt); d.vy *= Math.exp(-0.8 * dt); }
+      d.texture = d.flashT > 0 || (chasing && d.fireT < c.charge && d.fireT < 0.14)
+        ? TEX.hunterW : TEX.hunter;
+      const chargePulse = chasing && d.fireT < c.charge ? 1 + 0.16 * Math.sin(S.time * 26) : 1;
+      const popIn = 1 - Math.pow(1 - d.spawnK, 3);
+      d.scale.set(popIn * chargePulse);
+    }
+
+    else if (d.kind === 'spinner') {
+      d.rotA += c.spin * dt;
+      d.sprA += c.sprayRot * dt;
+      if (chasing) {
+        // drift toward a wandering interior anchor
+        const ddx = d.ax - d.x, ddy = d.ay - d.y;
+        const dd = Math.hypot(ddx, ddy);
+        if (dd < 30 || d.cool > c.coolDur + 5) {
+          d.ax = rand(W * 0.22, W * 0.78); d.ay = rand(H * 0.22, H * 0.78);
+        }
+        const ms = c.baseSpeed * sharedSpeedMult();
+        const dl2 = dd || 1;
+        const dvx = (ddx / dl2) * ms - d.vx, dvy = (ddy / dl2) * ms - d.vy;
+        const dl = Math.hypot(dvx, dvy) || 1;
+        const st = Math.min(c.accel * dt, dl);
+        d.vx += (dvx / dl) * st; d.vy += (dvy / dl) * st;
+
+        // spiral spray cycle
+        if (d.sprayT > 0) {
+          d.sprayT -= dt;
+          d.emitCd -= dt;
+          if (d.emitCd <= 0 && d.spawnK >= 1) {
+            d.emitCd = c.sprayEvery;
+            fireEnemyBullet(d.x, d.y, d.sprA,          c.bulletSpeed, d.k.color);
+            fireEnemyBullet(d.x, d.y, d.sprA + Math.PI, c.bulletSpeed, d.k.color);
+          }
+          if (d.sprayT <= 0) d.cool = c.coolDur;   // spray finished → cool down
+        } else {
+          d.cool -= dt;
+          if (d.cool <= 0) { d.sprayT = c.sprayDur; d.emitCd = 0; }
+        }
+      } else { d.vx *= Math.exp(-0.8 * dt); d.vy *= Math.exp(-0.8 * dt); }
+      d.texture = d.flashT > 0 ? TEX.spinnerW : TEX.spinner;
+      d.rotation = d.rotA;
+      const popIn = 1 - Math.pow(1 - d.spawnK, 3);
+      d.scale.set(popIn);
+    }
+
+    else if (d.kind === 'tank') {
+      d.rotA += 0.4 * dt;
+      if (chasing) {
+        const dx = player.x - d.x, dy = player.y - d.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const ms = c.baseSpeed * sharedSpeedMult();
+        const dvx = (dx / dist) * ms - d.vx, dvy = (dy / dist) * ms - d.vy;
+        const dl = Math.hypot(dvx, dvy) || 1;
+        const st = Math.min(c.accel * dt, dl);
+        d.vx += (dvx / dl) * st; d.vy += (dvy / dl) * st;
+
+        // periodic radial ring
+        d.cool -= dt;
+        if (d.cool <= 0 && d.spawnK >= 1) {
+          d.cool = c.fireCd;
+          const n = Math.min(14, c.ringCount + (S.tier - 1) * 2);
+          const off = rand(TAU);
+          for (let i = 0; i < n; i++) {
+            fireEnemyBullet(d.x, d.y, off + i / n * TAU, c.ringSpeed, d.k.color);
+          }
+          ring(d.x, d.y, d.k.color, 1.5, 0.3);
+          A.ui();
+        }
+        d.rotation = Math.atan2(dy, dx);
+      } else { d.vx *= Math.exp(-0.8 * dt); d.vy *= Math.exp(-0.8 * dt); }
+      d.texture = d.flashT > 0 ? TEX.tankW : TEX.tank;
+      const popIn = 1 - Math.pow(1 - d.spawnK, 3);
+      d.scale.set(popIn);
+    }
+
+    d.x += d.vx * dt; d.y += d.vy * dt;
+
+    // soft walls
+    const m = CFG.world.bound + 8;
+    if (d.x < m)     { d.x = m;     if (d.vx < 0) d.vx *= -0.5; }
+    if (d.x > W - m) { d.x = W - m; if (d.vx > 0) d.vx *= -0.5; }
+    if (d.y < m)     { d.y = m;     if (d.vy < 0) d.vy *= -0.5; }
+    if (d.y > H - m) { d.y = H - m; if (d.vy > 0) d.vy *= -0.5; }
+  }
+
+  // contact damage
+  if (chasing && player.iframes <= 0) {
+    for (const d of actives) {
+      const rr = player.ship.radius + d.radius;
+      if (Math.abs(d.x - player.x) < rr && Math.abs(d.y - player.y) < rr) {
+        if (Math.hypot(d.x - player.x, d.y - player.y) < rr) {
+          if (d.kind === 'drone') {
+            killEnemy(d, false);      // kamikaze drone pops — no score
+          } else {
+            // heavy bodies shove you and stay alive
+            const dx = player.x - d.x, dy = player.y - d.y;
+            const dd = Math.hypot(dx, dy) || 1;
+            player.vx += (dx / dd) * 260; player.vy += (dy / dd) * 260;
+            d.vx -= (dx / dd) * 80; d.vy -= (dy / dd) * 80;
+          }
+          playerHit(player.x - d.x, player.y - d.y, d.kind === 'tank' ? d.cfg.knock : 1);
+          break;
+        }
+      }
+    }
+  }
+}
+
+/* ===== 07 COLLISIONS — player bullets vs enemies ===== */
+function collideBullets () {
+  for (const b of bulletPool.items) {
+    if (!b.active) continue;
+    for (const d of enemyPool.items) {
+      if (!d.active || d === b.last) continue;
+      const rr = 3.5 + d.radius;
+      if (Math.abs(b.x - d.x) < rr && Math.abs(b.y - d.y) < rr) {
+        if (Math.hypot(b.x - d.x, b.y - d.y) < rr) {
+          b.last = d;
+          hitEnemy(d, b.vx, b.vy, b.dmg);
+          if (b.pierce > 0) { b.pierce -= 1; b.dmg = Math.max(1, b.dmg - 1); }
+          else { bulletPool.release(b); break; }
+        }
+      }
+    }
+  }
+}
+
+function hitEnemy (d, bvx, bvy, dmg) {
+  d.hp -= dmg;
+  if (d.hp > 0) {
+    d.flashT = 0.07;
+    const bl = Math.hypot(bvx, bvy) || 1;
+    const kb = d.kind === 'tank' ? 60 : 190;
+    d.vx += (bvx / bl) * kb; d.vy += (bvy / bl) * kb;
+    puff(d.x, d.y, 3, d.k.hi, 110);
+    return;
+  }
+  killEnemy(d, true);
+}
+
+function killEnemy (d, giveScore) {
+  const x = d.x, y = d.y;
+  const K = d.k, c = d.cfg;
+  enemyPool.release(d);
+  burstKill(x, y, K.color, K.hi);
+  ring(x, y, K.color, d.kind === 'tank' ? 2.8 : 1.9, 0.3);
+  ghost(x, y, TEX[K.tex + 'W'], d.kind === 'tank' ? 1.25 : 1);
+  addTrauma(CFG.feel.traumaKill * (d.kind === 'tank' ? 1.6 : 1));
+  hitstop(d.kind === 'tank' ? 0.09 : CFG.feel.hitstopKill);
+  S.gridPulse += CFG.feel.gridPulseKill;
+  if (d.kind === 'tank') A.boom(); else A.kill();
+  if (d.kind === 'tank') {
+    // death burst — do not stand still
+    const n = 10, off = rand(TAU);
+    for (let i = 0; i < n; i++) fireEnemyBullet(x, y, off + i / n * TAU, 160, K.color);
+  }
+  if (giveScore) {
+    const mult = comboMult();
+    const pts = Math.round(c.score * mult * DIFF().mult / 10) * 10;
+    S.score += pts;
+    S.kills += 1;
+    S.combo += 1;
+    S.comboT = CFG.combo.window;
+    const pcol = mult >= 3.5 ? '#ff2ec4' : mult >= 2 ? '#ffd23c' : COL.core;
+    popup(x, y, '+' + pts, pcol);
+    if (mult >= 2) popup(x, y - 20, '×' + mult.toFixed(1), pcol, 12);
+    hudScore();
+    checkNewBest();
+    rollDrops(x, y, d.kind);
+  }
+}

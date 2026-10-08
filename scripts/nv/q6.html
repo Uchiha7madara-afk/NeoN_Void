@@ -1,0 +1,284 @@
+
+/* ===== 07b PICKUPS — heart / gun / coin with magnet pull ===== */
+const pickupPool = makePool(CFG.pools.pickups, () => spriteOf(TEX.coin), pickupL);
+const PICKUP_TEX = { heart: TEX.heart, gun: TEX.gunpk, coin: TEX.coin };
+
+function dropPickup (x, y, kind) {
+  const p = pickupPool.get();
+  if (!p) return;
+  p.kind = kind;
+  p.texture = PICKUP_TEX[kind];
+  p.x = x; p.y = y;
+  const a = rand(TAU);
+  p.vx = Math.cos(a) * rand(50, 110);
+  p.vy = Math.sin(a) * rand(50, 110);
+  p.life = CFG.pickup.life;
+  p.t = rand(TAU);
+  p.scale.set(1);
+  p.alpha = 1;
+}
+
+function rollDrops (x, y, kind) {
+  const t = CFG.drops[kind];
+  if (pickupPool.countActive() >= CFG.pickup.maxField && kind !== 'tank') return;
+  const nCoins = t.coins ? t.coins() : (Math.random() < t.coin ? 1 : 0);
+  for (let i = 0; i < nCoins; i++) dropPickup(x + rand(-14, 14), y + rand(-14, 14), 'coin');
+  if (Math.random() < t.heart && player.hp < player.hpMax) dropPickup(x, y, 'heart');
+  else if (Math.random() < t.gun && player.gun < 5) dropPickup(x, y, 'gun');
+}
+
+function comboMult () {
+  return Math.min(CFG.combo.cap, 1 + S.combo * CFG.combo.step);
+}
+
+function updatePickups (dt) {
+  const magnetR = CFG.pickup.magnetR * (META.upg.magnet ? 1.7 : 1);
+  for (const p of pickupPool.items) {
+    if (!p.active) continue;
+    p.life -= dt;
+    if (p.life <= 0) { pickupPool.release(p); continue; }
+    p.t += dt;
+    // magnet pull
+    if (player.alive) {
+      const dx = player.x - p.x, dy = player.y - p.y;
+      const d = Math.hypot(dx, dy) || 1;
+      if (d < magnetR) {
+        p.vx += (dx / d) * CFG.pickup.pull * dt;
+        p.vy += (dy / d) * CFG.pickup.pull * dt;
+        const sp = Math.hypot(p.vx, p.vy);
+        if (sp > CFG.pickup.pullCap) { p.vx *= CFG.pickup.pullCap / sp; p.vy *= CFG.pickup.pullCap / sp; }
+      } else {
+        p.vx *= Math.exp(-1.4 * dt); p.vy *= Math.exp(-1.4 * dt);
+      }
+      if (d < CFG.pickup.collect) { collectPickup(p); continue; }
+    } else {
+      p.vx *= Math.exp(-1.4 * dt); p.vy *= Math.exp(-1.4 * dt);
+    }
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    // visuals: blink out, coins spin, hearts/guns bob
+    p.alpha = p.life < 2.5 ? (Math.sin(S.time * 22) > 0 ? 1 : 0.25) : 1;
+    if (p.kind === 'coin') {
+      p.rotation = 0;
+      p.scale.set(0.35 + 0.65 * Math.abs(Math.cos(p.t * 4.2)));
+    } else {
+      p.scale.set(1 + Math.sin(p.t * 3.4) * 0.08);
+      p.rotation = Math.sin(p.t * 2.2) * 0.12;
+    }
+  }
+}
+
+function collectPickup (p) {
+  const x = p.x, y = p.y;
+  pickupPool.release(p);
+  if (p.kind === 'coin') {
+    S.runCoins += CFG.pickup.coinValue;
+    popup(x, y, '+' + CFG.pickup.coinValue + ' CR', '#ffd23c', 14);
+    puff(x, y, 5, COL.coin, 90);
+    A.coin();
+    hudScore();
+  } else if (p.kind === 'heart') {
+    player.hp = Math.min(player.hpMax, player.hp + 1);
+    popup(x, y, '+1 HP', '#ff8fa3', 15);
+    ring(x, y, COL.heart, 1.4, 0.35);
+    puff(x, y, 6, COL.heart, 100);
+    A.heal();
+    hudHP();
+  } else if (p.kind === 'gun') {
+    if (player.gun < 5) {
+      player.gun += 1;
+      S.gun = player.gun;
+      const gt = CFG.gunTiers[player.gun - 1];
+      popup(x, y, gt.name + ' ONLINE', '#9dff3c', 16);
+      ring(x, y, COL.gunpk, 1.7, 0.4);
+      puff(x, y, 8, COL.gunpk, 120);
+      A.gun();
+      hudGun();
+    } else {
+      const pts = 250;
+      S.score += pts;
+      popup(x, y, 'MAX +' + pts, '#9dff3c', 15);
+      A.coin();
+      hudScore();
+    }
+  }
+}
+
+/* ===== 08 WAVES — budget director with breathers + tiers ===== */
+const Wv = { n: 0, queue: [], spawnCd: 0, phase: 'idle', breatherT: 0 };
+// phase: idle (title) | spawning | breather
+
+function buildQueue (budget, wave) {
+  const avail = ['drone'];
+  if (wave >= CFG.waves.unlock.hunter)  avail.push('hunter');
+  if (wave >= CFG.waves.unlock.spinner) avail.push('spinner');
+  if (wave >= CFG.waves.unlock.tank)    avail.push('tank');
+  const q = [];
+  let b = budget, guard = 0;
+  while (b > 0 && guard++ < 500) {
+    // weighted pick among affordable types
+    let total = 0;
+    const aff = [];
+    for (const k of avail) {
+      if (CFG.waves.cost[k] <= b) { aff.push(k); total += CFG.waves.weights[k]; }
+    }
+    if (!aff.length) { q.push('drone'); b -= 1; continue; }
+    let r = Math.random() * total;
+    let pick = aff[0];
+    for (const k of aff) { r -= CFG.waves.weights[k]; if (r <= 0) { pick = k; break; } }
+    q.push(pick);
+    b -= CFG.waves.cost[pick];
+  }
+  // shuffle lightly so bigs don't always come in the same order
+  for (let i = q.length - 1; i > 0; i--) {
+    if (Math.random() < 0.25) {
+      const j = (Math.random() * (i + 1)) | 0;
+      [q[i], q[j]] = [q[j], q[i]];
+    }
+  }
+  return q;
+}
+
+function startWave (n) {
+  Wv.n = n; S.wave = n;
+  S.tier = tierOf(n);
+  const budget = Math.floor(CFG.waves.budget(n) * DIFF().budget);
+  Wv.queue = buildQueue(budget, n);
+  Wv.spawnCd = 0.7;
+  Wv.phase = 'spawning';
+  const tierWave = n > 1 && (n - 1) % CFG.waves.tierEvery === 0;
+  if (tierWave) {
+    banner('WAVE ' + n + ' — TIER ' + S.tier + ' // THEY ADAPT', '#ffa23c', 30, 1.8);
+    A.tier();
+    addTrauma(0.18);
+  } else {
+    banner('WAVE ' + n, COL.text, 40, 1.5);
+  }
+  hudWave();
+}
+
+function countHostiles () {
+  return enemyPool.countActive() + telePool.countActive();
+}
+
+function wavesUpdate (dt) {
+  if (S.mode !== 'playing') return;
+  if (Wv.phase === 'spawning') {
+    if (Wv.queue.length > 0) {
+      Wv.spawnCd -= dt;
+      if (Wv.spawnCd <= 0 && countHostiles() < CFG.waves.maxActive) {
+        if (telegraphSpawn(Wv.queue.shift())) {
+          Wv.spawnCd = CFG.waves.spawnInterval(Wv.n) * rand(0.75, 1.25);
+        }
+      }
+    } else if (countHostiles() === 0) {
+      Wv.phase = 'breather';
+      Wv.breatherT = CFG.waves.breather;
+      const bonus = CFG.waves.clearBonus(Wv.n);
+      S.score += bonus;
+      popup(W / 2, H / 2 - 60, 'WAVE CLEAR  +' + bonus, COL.player, 22);
+      hudScore();
+      checkNewBest();
+    }
+  } else if (Wv.phase === 'breather') {
+    Wv.breatherT -= dt;
+    if (Wv.breatherT <= 0) startWave(Wv.n + 1);
+  }
+}
+
+/* ===== 09 SCORING + HUD (crisp layer, outside bloom) ===== */
+function pad (n, l) { return String(Math.max(0, n | 0)).padStart(l, '0'); }
+function mkText (str, size, weight, color, ls = 0, align = 'center') {
+  return new PIXI.Text({
+    text: str,
+    style: {
+      fontFamily: 'Orbitron, Arial', fontSize: size, fontWeight: String(weight),
+      fill: color, letterSpacing: ls, align,
+    },
+  });
+}
+
+const scoreT = mkText('SCORE 000000', 20, 700, COL.text, 2, 'left');
+scoreT.anchor.set(0, 0); scoreT.position.set(22, 16);
+const bestT = mkText('BEST 000000', 12, 500, COL.textDim, 2, 'left');
+bestT.anchor.set(0, 0); bestT.position.set(22, 44);
+const gunT = mkText('GUN 1 — PULSE', 12, 700, '#9dff3c', 2, 'left');
+gunT.anchor.set(0, 0); gunT.position.set(22, 64);
+const waveT = mkText('WAVE 1', 15, 700, '#b98cff', 4);
+waveT.anchor.set(0.5, 0); waveT.position.set(W / 2, 18);
+const comboT = mkText('', 15, 900, '#ffd23c', 2);
+comboT.anchor.set(0.5, 0); comboT.position.set(W / 2, 42); comboT.visible = false;
+const comboBar = new PIXI.Graphics();
+comboBar.position.set(W / 2, 66); comboBar.visible = false;
+const coinT = mkText('CR +0', 13, 700, '#ffd23c', 2, 'right');
+coinT.anchor.set(1, 0); coinT.position.set(W - 22, 52);
+let hpPips = [];
+function buildHpPips () {
+  for (const p of hpPips) { p.destroy(); }
+  hpPips = [];
+  for (let i = 0; i < player.hpMax; i++) {
+    const p = new PIXI.Sprite(TEX[shipTexName(player.ship)]);
+    p.anchor.set(0.5); p.scale.set(0.62);
+    p.position.set(W - 30 - i * 34, 30);
+    p.rotation = Math.PI / 2;
+    crisp.addChild(p); hpPips.push(p);
+  }
+}
+crisp.addChild(scoreT, bestT, gunT, waveT, comboT, comboBar, coinT);
+
+function hudScore () {
+  scoreT.text = 'SCORE ' + pad(S.score, 6);
+  bestT.text = 'BEST ' + pad(S.bestBeaten ? S.score : S.best, 6);
+  coinT.text = 'CR +' + S.runCoins;
+}
+function hudWave () { waveT.text = 'WAVE ' + Math.max(1, S.wave); }
+function hudGun () { gunT.text = 'GUN ' + player.gun + ' — ' + CFG.gunTiers[player.gun - 1].name; }
+function hudHP () { for (let i = 0; i < hpPips.length; i++) hpPips[i].alpha = i < player.hp ? 1 : 0.13; }
+
+function hudCombo (dt) {
+  if (S.combo > 0) {
+    S.comboT -= dt;
+    if (S.comboT <= 0) { S.combo = 0; }
+  }
+  const on = S.combo >= 2;
+  comboT.visible = on; comboBar.visible = on;
+  if (on) {
+    const m = comboMult();
+    comboT.text = 'COMBO ×' + m.toFixed(1);
+    comboT.style.fill = m >= 3.5 ? '#ff2ec4' : '#ffd23c';
+    const k = clamp(S.comboT / CFG.combo.window, 0, 1);
+    comboBar.clear()
+      .rect(-52, -1.5, 104, 3).fill({ color: 0xffffff, alpha: 0.10 })
+      .rect(-52, -1.5, 104 * k, 3).fill({ color: m >= 3.5 ? 0xff2ec4 : 0xffd23c, alpha: 0.9 });
+  }
+}
+
+function checkNewBest () {
+  if (!S.bestBeaten && S.best > 0 && S.score > S.best) {
+    S.bestBeaten = true;
+    popup(W / 2, 90, 'NEW BEST!', COL.player, 24);
+    bestT.text = 'BEST ' + pad(S.score, 6);
+    addTrauma(0.2);
+  }
+}
+
+// Wave banner (single pooled text, animated in the loop)
+const bannerT = mkText('', 40, 900, COL.text, 8);
+bannerT.anchor.set(0.5); bannerT.position.set(W / 2, H * 0.4);
+bannerT.visible = false;
+crisp.addChild(bannerT);
+const bannerSt = { t: 0, dur: 0 };
+function banner (txt, color, size, dur) {
+  bannerT.text = txt; bannerT.style.fill = color; bannerT.style.fontSize = size;
+  bannerSt.t = 0; bannerSt.dur = dur;
+  bannerT.visible = true; bannerT.alpha = 0; bannerT.scale.set(1.35);
+}
+function updateBanner (dt) {
+  if (!bannerT.visible) return;
+  bannerSt.t += dt;
+  const k = bannerSt.t / bannerSt.dur;
+  if (k >= 1) { bannerT.visible = false; return; }
+  const inK = clamp(bannerSt.t / 0.18, 0, 1);
+  const outK = clamp((bannerSt.dur - bannerSt.t) / 0.3, 0, 1);
+  bannerT.alpha = Math.min(inK, outK);
+  bannerT.scale.set(lerp(1.35, 1, inK));
+}

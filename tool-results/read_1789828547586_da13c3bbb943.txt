@@ -1,0 +1,1159 @@
+     1→     1→<!DOCTYPE html>
+     2→     2→<html lang="en">
+     3→     3→<head>
+     4→     4→<meta charset="UTF-8">
+     5→     5→<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+     6→     6→<title>NEON VOID — Feel Slice v0.1</title>
+     7→     7→<link rel="preconnect" href="https://fonts.googleapis.com">
+     8→     8→<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+     9→     9→<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+    10→    10→<style>
+    11→    11→  html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#05010a; }
+    12→    12→  canvas { display:block; cursor:none; }
+    13→    13→  #boot-error {
+    14→    14→    position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+    15→    15→    color:#eaf6ff; font-family:Arial, sans-serif; background:#05010a; z-index:10;
+    16→    16→    text-align:center; padding:24px; line-height:1.8;
+    17→    17→  }
+    18→    18→</style>
+    19→    19→</head>
+    20→    20→<body>
+    21→    21→<div id="boot-error">NEON VOID could not load its renderer.<br>PixiJS loads from a CDN — check your internet connection and reload.</div>
+    22→    22→<script src="https://cdn.jsdelivr.net/npm/pixi.js@8/dist/pixi.min.js"></script>
+    23→    23→<script src="https://cdn.jsdelivr.net/npm/pixi-filters@6/dist/pixi-filters.min.js"></script>
+    24→    24→<script>
+    25→    25→/* ============================================================
+    26→    26→   NEON VOID — Feel Slice v0.1  (single-file build)
+    27→    27→   Bands below map 1:1 to the future src/ split.
+    28→    28→   All tuning lives in CFG. All shapes are generated at runtime.
+    29→    29→   ============================================================ */
+    30→    30→(async () => {
+    31→    31→
+    32→    32→function bootFail () {
+    33→    33→  const el = document.getElementById('boot-error');
+    34→    34→  if (el) el.style.display = 'flex';
+    35→    35→}
+    36→    36→if (typeof PIXI === 'undefined') { bootFail(); return; }
+    37→    37→
+    38→    38→/* ===== 00 CONFIG ===== */
+    39→    39→const TAU = Math.PI * 2;
+    40→    40→const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+    41→    41→const lerp  = (a, b, t) => a + (b - a) * t;
+    42→    42→const rand  = (a = 1, b) => b === undefined ? Math.random() * a : a + Math.random() * (b - a);
+    43→    43→const damp  = (rate, dt) => 1 - Math.exp(-rate * dt);
+    44→    44→function lerpAngle (a, b, t) {
+    45→    45→  let d = (b - a) % TAU;
+    46→    46→  if (d >  Math.PI) d -= TAU;
+    47→    47→  if (d < -Math.PI) d += TAU;
+    48→    48→  return a + d * t;
+    49→    49→}
+    50→    50→
+    51→    51→const CFG = {
+    52→    52→  world: { w: 1280, h: 720, bound: 24, spawnInset: 46 },
+    53→    53→
+    54→    54→  colors: {
+    55→    55→    bg:      0x0a0014,   // arena floor
+    56→    56→    bar:     0x05010a,   // letterbox
+    57→    57→    grid:    0x9d5cff,   // faint purple grid
+    58→    58→    border:  0xa44dff,   // arena border
+    59→    59→    player:  0x2cf6ff,   // cyan
+    60→    60→    core:    0xdfffff,   // near-white cores
+    61→    61→    trail:   0xff2ec4,   // pink engine
+    62→    62→    drone:   0xff2b4e,   // red drones
+    63→    63→    droneHi: 0xffd9de,
+    64→    64→    text:    '#eaf6ff',
+    65→    65→    textDim: '#8f7fb8',
+    66→    66→  },
+    67→    67→
+    68→    68→  bloom: { threshold: 0.22, bloomScale: 0.85, brightness: 1.12, blur: 7 },
+    69→    69→
+    70→    70→  player: {
+    71→    71→    accel: 2600, maxSpeed: 360, drag: 4.2,
+    72→    72→    turnLerp: 18,
+    73→    73→    radius: 9,            // hitbox — deliberately smaller than the sprite
+    74→    74→    hp: 3, iframes: 1.5,
+    75→    75→    fireRate: 8,          // shots / sec while holding LMB
+    76→    76→    bulletSpeed: 780, bulletLife: 1.05, bulletRadius: 3.5, bulletSpread: 0.014,
+    77→    77→    wallBounce: 0.45,
+    78→    78→    trailRate: 70,        // particles / sec at full thrust
+    79→    79→  },
+    80→    80→
+    81→    81→  drone: {
+    82→    82→    radius: 13, hp: 1,
+    83→    83→    baseSpeed: 62, speedRamp: 0.075, speedCap: 2.5,
+    84→    84→    accel: 300,
+    85→    85→    weaveFreq: 2.1, weaveAmp: 0.55,
+    86→    86→    sepDist: 34, sepForce: 150,
+    87→    87→    spin: 1.3, pulseAmp: 0.09, pulseRate: 3.2,
+    88→    88→    score: 100, maxActive: 34,
+    89→    89→  },
+    90→    90→
+    91→    91→  waves: {
+    92→    92→    quota:        w => 4 + Math.floor(w * 1.7),
+    93→    93→    spawnInterval:w => Math.max(0.42, 1.5 - w * 0.11),
+    94→    94→    breather: 2.2, telegraph: 0.7,
+    95→    95→    minPlayerDist: 190,
+    96→    96→  },
+    97→    97→
+    98→    98→  feel: {
+    99→    99→    shakeMax: 16, traumaDecay: 1.7,
+   100→   100→    traumaKill: 0.34, traumaHurt: 0.85, traumaWall: 0.10,
+   101→   101→    hitstopKill: 0.05, hitstopHurt: 0.10,
+   102→   102→    gridPulseKill: 0.55, gridPulseDecay: 2.4,
+   103→   103→    hurtFlash: 0.24,
+   104→   104→    dyingSlowmo: 0.22, dyingTime: 0.85,
+   105→   105→  },
+   106→   106→
+   107→   107→  pools: { bullets: 96, particles: 420, rings: 24, ghosts: 16, popups: 18, teles: 12 },
+   108→   108→
+   109→   109→  audio: {
+   110→   110→    master: 0.5,
+   111→   111→    shoot: { type: 'square',   f0: 840, fMul: 0.72, dur: 0.07, vol: 0.075 },
+   112→   112→    kill:  { noise: { dur: 0.26, vol: 0.34, lp0: 3200, lp1: 160 },
+   113→   113→             tone: { type: 'triangle', f0: 210, f1: 42, dur: 0.30, vol: 0.22 } },
+   114→   114→    hurt:  { tone: { type: 'sawtooth', f0: 150, f1: 46, dur: 0.22, vol: 0.38 },
+   115→   115→             noise: { dur: 0.12, vol: 0.18, lp0: 700, lp1: 180 } },
+   116→   116→  },
+   117→   117→};
+   118→   118→const W = CFG.world.w, H = CFG.world.h;
+   119→   119→const COL = CFG.colors;
+   120→   120→
+   121→   121→/* ===== 01 CORE — boot, renderer, layers ===== */
+   122→   122→const app = new PIXI.Application();
+   123→   123→await app.init({
+   124→   124→  width: window.innerWidth, height: window.innerHeight,
+   125→   125→  background: COL.bar, antialias: true,
+   126→   126→  resolution: Math.min(window.devicePixelRatio || 1, 2),
+   127→   127→  autoDensity: true, powerPreference: 'high-performance',
+   128→   128→});
+   129→   129→document.body.appendChild(app.canvas);
+   130→   130→
+   131→   131→// Best-effort font load (don't block forever if offline)
+   132→   132→try {
+   133→   133→  await Promise.race([
+   134→   134→    Promise.all([
+   135→   135→      document.fonts.load('900 72px Orbitron'),
+   136→   136→      document.fonts.load('700 20px Orbitron'),
+   137→   137→      document.fonts.load('500 16px Orbitron'),
+   138→   138→    ]),
+   139→   139→    new Promise(r => setTimeout(r, 1800)),
+   140→   140→  ]);
+   141→   141→} catch (e) { /* fallback font is fine */ }
+   142→   142→
+   143→   143→// AdvancedBloomFilter — the whole aesthetic. Graceful fallback if CDN filter pack fails.
+   144→   144→const FXNS = (PIXI.filters && PIXI.filters.AdvancedBloomFilter) ? PIXI.filters : PIXI;
+   145→   145→const AdvancedBloomFilter = FXNS.AdvancedBloomFilter;
+   146→   146→
+   147→   147→// Layer tree:
+   148→   148→// stage
+   149→   149→// ├ worldRoot (letterbox transform + shake) └ glow [bloom] └ crisp (HUD, no bloom)
+   150→   150→// ├ overlayRoot (letterbox transform, no shake)
+   151→   151→// └ flashRect (fullscreen damage flash)
+   152→   152→const worldRoot = new PIXI.Container();
+   153→   153→const overlayRoot = new PIXI.Container();
+   154→   154→const glow = new PIXI.Container();
+   155→   155→const crisp = new PIXI.Container();
+   156→   156→if (AdvancedBloomFilter) {
+   157→   157→  glow.filters = [new AdvancedBloomFilter(CFG.bloom)];
+   158→   158→} else {
+   159→   159→  console.warn('[NeonVoid] pixi-filters not found — running on layered-stroke glow only.');
+   160→   160→}
+   161→   161→worldRoot.addChild(glow, crisp);
+   162→   162→app.stage.addChild(worldRoot, overlayRoot);
+   163→   163→
+   164→   164→// Arena floor (slightly lighter than the letterbox bars so the play space reads instantly)
+   165→   165→const floor = new PIXI.Graphics()
+   166→   166→  .rect(0, 0, W, H)
+   167→   167→  .fill({ color: COL.bg, alpha: 1 });
+   168→   168→glow.addChild(floor);
+   169→   169→
+   170→   170→const fxL      = new PIXI.Container();  // particles, rings, ghosts
+   171→   171→const droneL   = new PIXI.Container();
+   172→   172→const bulletL  = new PIXI.Container();
+   173→   173→const popupL   = new PIXI.Container();
+   174→   174→glow.addChild(fxL, droneL, bulletL, popupL);
+   175→   175→
+   176→   176→const flashRect = new PIXI.Graphics()
+   177→   177→  .rect(0, 0, window.innerWidth, window.innerHeight)
+   178→   178→  .fill({ color: 0xffffff, alpha: 1 });
+   179→   179→flashRect.alpha = 0;
+   180→   180→app.stage.addChild(flashRect);
+   181→   181→
+   182→   182→// Global "feel" state
+   183→   183→const S = {
+   184→   184→  mode: 'boot',           // boot | title | playing | dying | over | paused
+   185→   185→  time: 0,
+   186→   186→  score: 0, best: 0, bestBeaten: false, kills: 0,
+   187→   187→  wave: 0,
+   188→   188→  timescale: 1, hitstop: 0,
+   189→   189→  trauma: 0, shakeX: 0, shakeY: 0,
+   190→   190→  gridPulse: 0, flashA: 0,
+   191→   191→  dyingT: 0,
+   192→   192→};
+   193→   193→try { S.best = parseInt(localStorage.getItem('neonvoid_best') || '0', 10) || 0; } catch (e) {}
+   194→   194→
+   195→   195→function resize () {
+   196→   196→  const vw = window.innerWidth, vh = window.innerHeight;
+   197→   197→  app.renderer.resize(vw, vh);
+   198→   198→  const s = Math.min(vw / W, vh / H);
+   199→   199→  scaleS = s; offX = (vw - W * s) / 2; offY = (vh - H * s) / 2;
+   200→   200→  viewW = vw; viewH = vh;
+   201→   201→  worldRoot.position.set(offX, offY);   worldRoot.scale.set(s);
+   202→   202→  overlayRoot.position.set(offX, offY); overlayRoot.scale.set(s);
+   203→   203→  flashRect.clear().rect(0, 0, vw, vh).fill({ color: 0xffffff, alpha: 1 });
+   204→   204→  flashRect.alpha = S.flashA;
+   205→   205→}
+   206→   206→let scaleS = 1, offX = 0, offY = 0, viewW = 0, viewH = 0;
+   207→   207→window.addEventListener('resize', resize);
+   208→   208→
+   209→   209→/* ===== 02 FX — grid, border, shake, hit-stop, flashes ===== */
+   210→   210→
+   211→   211→// Background grid — drawn ONCE, pulsing via container alpha (zero per-frame cost)
+   212→   212→const gridG = new PIXI.Graphics();
+   213→   213→for (let x = 64; x < W; x += 64) {
+   214→   214→  const major = (x / 64) % 4 === 0;
+   215→   215→  gridG.moveTo(x, 0).lineTo(x, H).stroke({ width: 1, color: COL.grid, alpha: major ? 0.15 : 0.08 });
+   216→   216→}
+   217→   217→for (let y = 64; y < H; y += 64) {
+   218→   218→  const major = (y / 64) % 4 === 0;
+   219→   219→  gridG.moveTo(0, y).lineTo(W, y).stroke({ width: 1, color: COL.grid, alpha: major ? 0.15 : 0.08 });
+   220→   220→}
+   221→   221→const gridC = new PIXI.Container();
+   222→   222→gridC.addChild(gridG);
+   223→   223→glow.addChildAt(gridC, 1); // above floor, below everything else
+   224→   224→
+   225→   225→// Arena border — glowing purple rectangle + Tron corner brackets
+   226→   226→const borderG = new PIXI.Graphics();
+   227→   227→borderG.rect(4, 4, W - 8, H - 8).stroke({ width: 6, color: COL.border, alpha: 0.14 });
+   228→   228→borderG.rect(4, 4, W - 8, H - 8).stroke({ width: 2, color: COL.border, alpha: 0.75 });
+   229→   229→const CL = 34; // corner bracket length
+   230→   230→[[6, 6, 1, 1], [W - 6, 6, -1, 1], [6, H - 6, 1, -1], [W - 6, H - 6, -1, -1]].forEach(([cx, cy, dx, dy]) => {
+   231→   231→  borderG.moveTo(cx, cy + dy * CL).lineTo(cx, cy).lineTo(cx + dx * CL, cy)
+   232→   232→    .stroke({ width: 3.5, color: 0xd8b4ff, alpha: 0.9 });
+   233→   233→});
+   234→   234→const borderC = new PIXI.Container();
+   235→   235→borderC.addChild(borderG);
+   236→   236→glow.addChild(borderC);
+   237→   237→
+   238→   238→function fxUpdate (dt, rawDt) {
+   239→   239→  // grid breathes + flashes brighter on kills
+   240→   240→  gridC.alpha = clamp(0.72 + 0.28 * Math.sin(S.time * 0.8) + S.gridPulse, 0, 1.6);
+   241→   241→  S.gridPulse = Math.max(0, S.gridPulse - CFG.feel.gridPulseDecay * rawDt);
+   242→   242→  borderC.alpha = 0.78 + 0.22 * Math.sin(S.time * 2.1);
+   243→   243→
+   244→   244→  // trauma → shake (decays in real time so shake survives hit-stop)
+   245→   245→  S.trauma = Math.max(0, S.trauma - CFG.feel.traumaDecay * rawDt);
+   246→   246→  const mag = S.trauma * S.trauma * CFG.feel.shakeMax;
+   247→   247→  S.shakeX = (Math.random() * 2 - 1) * mag;
+   248→   248→  S.shakeY = (Math.random() * 2 - 1) * mag * 0.85;
+   249→   249→  worldRoot.position.set(offX + S.shakeX, offY + S.shakeY);
+   250→   250→  worldRoot.rotation = ((Math.random() * 2 - 1) * mag) * 0.0012;
+   251→   251→
+   252→   252→  // fullscreen damage flash
+   253→   253→  S.flashA = Math.max(0, S.flashA - 3.5 * rawDt);
+   254→   254→  flashRect.alpha = S.flashA;
+   255→   255→}
+   256→   256→function addTrauma (v) { S.trauma = clamp(S.trauma + v, 0, 1); }
+   257→   257→function hitstop (t)   { S.hitstop = Math.max(S.hitstop, t); }
+   258→   258→
+   259→   259→// Mouse reticle — drawn vector crosshair, additive, gentle pulse
+   260→   260→const reticle = new PIXI.Graphics();
+   261→   261→reticle.circle(0, 0, 10).stroke({ width: 1.5, color: COL.player, alpha: 0.85 });
+   262→   262→reticle.circle(0, 0, 1.8).fill({ color: COL.core, alpha: 1 });
+   263→   263→for (let i = 0; i < 4; i++) {
+   264→   264→  const a = i * Math.PI / 2;
+   265→   265→  reticle.moveTo(Math.cos(a) * 13, Math.sin(a) * 13)
+   266→   266→    .lineTo(Math.cos(a) * 19, Math.sin(a) * 19)
+   267→   267→    .stroke({ width: 1.5, color: COL.player, alpha: 0.7 });
+   268→   268→}
+   269→   269→reticle.blendMode = 'add';
+   270→   270→glow.addChild(reticle);
+   271→   271→
+   272→   272→/* ===== 03 POOLS — baked textures + particles/rings/ghosts/popups ===== */
+   273→   273→
+   274→   274→// "Zero asset files" ≠ zero GPU textures: we draw vectors once and bake them.
+   275→   275→function bake (draw, res = 2) {
+   276→   276→  const g = new PIXI.Graphics();
+   277→   277→  draw(g);
+   278→   278→  const tx = app.renderer.generateTexture({ target: g, resolution: res, antialias: true });
+   279→   279→  g.destroy();
+   280→   280→  return tx;
+   281→   281→}
+   282→   282→function neonPoly (g, pts, fillColor, glowColor, coreColor, hw, mw, cw, fa) {
+   283→   283→  g.poly(pts).fill({ color: fillColor, alpha: 1 });
+   284→   284→  g.poly(pts).stroke({ width: hw, color: glowColor, alpha: 0.20, join: 'round' });
+   285→   285→  g.poly(pts).stroke({ width: mw, color: glowColor, alpha: 0.85, join: 'round' });
+   286→   286→  g.poly(pts).stroke({ width: cw, color: coreColor, alpha: fa, join: 'round' });
+   287→   287→}
+   288→   288→const SHIP_PTS = [19, 0, -13, -12, -6, 0, -13, 12];         // cyan arrow
+   289→   289→const DRONE_PTS = [15, 0, 0, 11, -15, 0, 0, -11];           // red diamond
+   290→   290→
+   291→   291→const TEX = {};
+   292→   292→function bakeTextures () {
+   293→   293→  TEX.ship = bake(g => neonPoly(g, SHIP_PTS, 0x07222c, COL.player, COL.core, 9, 3.5, 1.6, 0.95));
+   294→   294→  TEX.shipW = bake(g => neonPoly(g, SHIP_PTS, 0xffffff, 0xffffff, 0xffffff, 7, 3, 1.5, 1));
+   295→   295→  TEX.drone = bake(g => neonPoly(g, DRONE_PTS, 0x2a040c, COL.drone, COL.droneHi, 8, 3, 1.4, 0.9));
+   296→   296→  TEX.droneW = bake(g => neonPoly(g, DRONE_PTS, 0xffffff, 0xffffff, 0xffffff, 6, 3, 1.4, 1));
+   297→   297→  TEX.bullet = bake(g => {
+   298→   298→    g.roundRect(-7, -1.8, 14, 3.6, 1.8).fill({ color: 0x063040, alpha: 1 });
+   299→   299→    g.roundRect(-7, -1.8, 14, 3.6, 1.8).stroke({ width: 3.5, color: COL.player, alpha: 0.28 });
+   300→   300→    g.roundRect(-7, -1.8, 14, 3.6, 1.8).stroke({ width: 1.6, color: COL.player, alpha: 0.9 });
+   301→   301→    g.roundRect(-5, -0.9, 10, 1.8, 0.9).fill({ color: COL.core, alpha: 1 });
+   302→   302→  });
+   303→   303→  TEX.dot = bake(g => {   // soft round particle (tint per use)
+   304→   304→    g.circle(0, 0, 8).fill({ color: 0xffffff, alpha: 0.22 });
+   305→   305→    g.circle(0, 0, 5.5).fill({ color: 0xffffff, alpha: 0.5 });
+   306→   306→    g.circle(0, 0, 3).fill({ color: 0xffffff, alpha: 1 });
+   307→   307→  });
+   308→   308→  TEX.spark = bake(g => { // diamond shard
+   309→   309→    g.poly([0, -7, 2.6, 0, 0, 7, -2.6, 0]).fill({ color: 0xffffff, alpha: 1 });
+   310→   310→  });
+   311→   311→  TEX.ring = bake(g => {  // shockwave ring (tint per use)
+   312→   312→    g.circle(0, 0, 24).stroke({ width: 5, color: 0xffffff, alpha: 0.35 });
+   313→   313→    g.circle(0, 0, 24).stroke({ width: 2, color: 0xffffff, alpha: 1 });
+   314→   314→  });
+   315→   315→}
+   316→   316→bakeTextures(); // must run before pool factories below reference TEX.*
+   317→   317→
+   318→   318→// Generic fixed-size pool. Objects get .active/.visible toggles.
+   319→   319→function makePool (n, factory, layer) {
+   320→   320→  const items = [];
+   321→   321→  for (let i = 0; i < n; i++) {
+   322→   322→    const o = factory();
+   323→   323→    o.active = false; o.visible = false;
+   324→   324→    layer.addChild(o);
+   325→   325→    items.push(o);
+   326→   326→  }
+   327→   327→  return {
+   328→   328→    items,
+   329→   329→    get () {
+   330→   330→      for (const o of items) if (!o.active) { o.active = true; o.visible = true; return o; }
+   331→   331→      return null;
+   332→   332→    },
+   333→   333→    release (o) { o.active = false; o.visible = false; },
+   334→   334→    releaseAll () { for (const o of items) { o.active = false; o.visible = false; } },
+   335→   335→    countActive () { let c = 0; for (const o of items) if (o.active) c++; return c; },
+   336→   336→  };
+   337→   337→}
+   338→   338→function spriteOf (tex) { const s = new PIXI.Sprite(tex); s.anchor.set(0.5); s.blendMode = 'add'; return s; }
+   339→   339→
+   340→   340→// --- particles: sparks (diamonds) + embers (soft dots) + trails ---
+   341→   341→const partPool = makePool(CFG.pools.particles, () => spriteOf(TEX.dot), fxL);
+   342→   342→function emit (o) {
+   343→   343→  const p = partPool.get();
+   344→   344→  if (!p) return;
+   345→   345→  p.texture = o.tex || TEX.dot;
+   346→   346→  p.tint = o.tint ?? 0xffffff;
+   347→   347→  p.x = o.x; p.y = o.y;
+   348→   348→  p.vx = o.vx || 0; p.vy = o.vy || 0;
+   349→   349→  p.life = p.maxLife = o.life || 0.5;
+   350→   350→  p.size0 = o.size || 1; p.grow = o.grow || 0;
+   351→   351→  p.drag = o.drag ?? 2.5;
+   352→   352→  p.alpha0 = o.alpha ?? 1;
+   353→   353→  p.alpha = p.alpha0;
+   354→   354→  p.rotation = o.rot || 0;
+   355→   355→  p.scale.set(o.size || 1);
+   356→   356→}
+   357→   357→function burstKill (x, y) {
+   358→   358→  // sparks — hot mix of red / white / amber
+   359→   359→  for (let i = 0; i < 14; i++) {
+   360→   360→    const a = rand(TAU), sp = rand(110, 430);
+   361→   361→    emit({
+   362→   362→      tex: TEX.spark, tint: Math.random() < 0.45 ? COL.droneHi : (Math.random() < 0.5 ? COL.drone : 0xffb46e),
+   363→   363→      x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+   364→   364→      life: rand(0.28, 0.62), size: rand(0.5, 1.05), drag: 3.2, rot: rand(TAU),
+   365→   365→    });
+   366→   366→  }
+   367→   367→  // slow embers
+   368→   368→  for (let i = 0; i < 4; i++) {
+   369→   369→    const a = rand(TAU), sp = rand(20, 90);
+   370→   370→    emit({
+   371→   371→      tex: TEX.dot, tint: COL.drone, x, y,
+   372→   372→      vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+   373→   373→      life: rand(0.45, 0.8), size: rand(0.9, 1.5), grow: 1.4, drag: 1.6, alpha: 0.55,
+   374→   374→    });
+   375→   375→  }
+   376→   376→}
+   377→   377→function puff (x, y, n, tint, spread = 90) {
+   378→   378→  for (let i = 0; i < n; i++) {
+   379→   379→    const a = rand(TAU), sp = rand(30, spread);
+   380→   380→    emit({ tex: TEX.dot, tint, x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.2, 0.4), size: rand(0.5, 0.9), drag: 4 });
+   381→   381→  }
+   382→   382→}
+   383→   383→function updateParticles (dt) {
+   384→   384→  for (const p of partPool.items) {
+   385→   385→    if (!p.active) continue;
+   386→   386→    p.life -= dt;
+   387→   387→    if (p.life <= 0) { partPool.release(p); continue; }
+   388→   388→    const k = Math.exp(-p.drag * dt);
+   389→   389→    p.vx *= k; p.vy *= k;
+   390→   390→    p.x += p.vx * dt; p.y += p.vy * dt;
+   391→   391→    const t = p.life / p.maxLife;
+   392→   392→    p.alpha = p.alpha0 * Math.min(1, t * 1.6);
+   393→   393→    const sc = p.size0 * (p.grow ? 1 + (1 - t) * p.grow : (0.4 + 0.6 * t));
+   394→   394→    p.scale.set(sc);
+   395→   395→  }
+   396→   396→}
+   397→   397→
+   398→   398→// --- shockwave rings ---
+   399→   399→const ringPool = makePool(CFG.pools.rings, () => spriteOf(TEX.ring), fxL);
+   400→   400→function ring (x, y, tint, maxScale = 2.1, dur = 0.28) {
+   401→   401→  const r = ringPool.get();
+   402→   402→  if (!r) return;
+   403→   403→  r.texture = TEX.ring; r.tint = tint;
+   404→   404→  r.x = x; r.y = y; r.t = 0; r.dur = dur; r.maxScale = maxScale;
+   405→   405→  r.scale.set(0.3); r.alpha = 0.9;
+   406→   406→}
+   407→   407→function updateRings (dt) {
+   408→   408→  for (const r of ringPool.items) {
+   409→   409→    if (!r.active) continue;
+   410→   410→    r.t += dt;
+   411→   411→    const k = r.t / r.dur;
+   412→   412→    if (k >= 1) { ringPool.release(r); continue; }
+   413→   413→    r.scale.set(lerp(0.3, r.maxScale, 1 - Math.pow(1 - k, 2)));
+   414→   414→    r.alpha = 0.9 * (1 - k);
+   415→   415→  }
+   416→   416→}
+   417→   417→
+   418→   418→// --- white ghost flashes (enemy silhouette pop) ---
+   419→   419→const ghostPool = makePool(CFG.pools.ghosts, () => spriteOf(TEX.droneW), fxL);
+   420→   420→function ghost (x, y, tex, scale = 1) {
+   421→   421→  const g = ghostPool.get();
+   422→   422→  if (!g) return;
+   423→   423→  g.texture = tex; g.x = x; g.y = y;
+   424→   424→  g.t = 0; g.dur = 0.16; g.scale0 = scale;
+   425→   425→  g.scale.set(scale); g.alpha = 1; g.rotation = 0;
+   426→   426→}
+   427→   427→function updateGhosts (dt) {
+   428→   428→  for (const g of ghostPool.items) {
+   429→   429→    if (!g.active) continue;
+   430→   430→    g.t += dt;
+   431→   431→    const k = g.t / g.dur;
+   432→   432→    if (k >= 1) { ghostPool.release(g); continue; }
+   433→   433→    g.scale.set(g.scale0 * (1 + k * 0.7));
+   434→   434→    g.alpha = 1 - k;
+   435→   435→  }
+   436→   436→}
+   437→   437→
+   438→   438→// --- floating score popups ---
+   439→   439→const popupPool = makePool(CFG.pools.popups, () => {
+   440→   440→  const t = new PIXI.Text({
+   441→   441→    text: '', style: {
+   442→   442→      fontFamily: 'Orbitron, Arial', fontSize: 17, fontWeight: '700',
+   443→   443→      fill: COL.text, letterSpacing: 1,
+   444→   444→    },
+   445→   445→  });
+   446→   446→  t.anchor.set(0.5);
+   447→   447→  return t;
+   448→   448→}, popupL);
+   449→   449→function popup (x, y, str, color = COL.text, size = 17) {
+   450→   450→  const p = popupPool.get();
+   451→   451→  if (!p) return;
+   452→   452→  p.text = str;
+   453→   453→  p.style.fill = color; p.style.fontSize = size;
+   454→   454→  p.x = x + rand(-6, 6); p.y = y - 10;
+   455→   455→  p.t = 0; p.dur = 0.75; p.vx = rand(-14, 14);
+   456→   456→  p.scale.set(1.35); p.alpha = 1;
+   457→   457→}
+   458→   458→function updatePopups (dt) {
+   459→   459→  for (const p of popupPool.items) {
+   460→   460→    if (!p.active) continue;
+   461→   461→    p.t += dt;
+   462→   462→    const k = p.t / p.dur;
+   463→   463→    if (k >= 1) { popupPool.release(p); continue; }
+   464→   464→    p.y -= 52 * dt * (1 - k * 0.5);
+   465→   465→    p.x += p.vx * dt;
+   466→   466→    p.scale.set(lerp(1, 1.35, Math.max(0, 1 - k * 4)) );
+   467→   467→    p.alpha = k < 0.6 ? 1 : 1 - (k - 0.6) / 0.4;
+   468→   468→  }
+   469→   469→}
+   470→   470→
+   471→   471→/* ===== 04 PLAYER ===== */
+   472→   472→const PC = CFG.player;
+   473→   473→const player = {
+   474→   474→  x: W / 2, y: H / 2, vx: 0, vy: 0,
+   475→   475→  angle: -Math.PI / 2,       // facing (lerped toward mouse)
+   476→   476→  hp: PC.hp, iframes: 0, fireCd: 0,
+   477→   477→  alive: true, thrust: 0, trailAcc: 0,
+   478→   478→  squashX: 0, squashY: 0,    // wall-bounce squash timers
+   479→   479→  flashT: 0,
+   480→   480→};
+   481→   481→const playerSpr = new PIXI.Sprite(TEX.ship);
+   482→   482→playerSpr.anchor.set(0.5);
+   483→   483→glow.addChild(playerSpr);
+   484→   484→
+   485→   485→function playerReset () {
+   486→   486→  player.x = W / 2; player.y = H / 2;
+   487→   487→  player.vx = player.vy = 0;
+   488→   488→  player.angle = -Math.PI / 2;
+   489→   489→  player.hp = PC.hp; player.iframes = 0; player.fireCd = 0;
+   490→   490→  player.alive = true; player.flashT = 0;
+   491→   491→  playerSpr.visible = true;
+   492→   492→}
+   493→   493→
+   494→   494→function playerUpdate (dt) {
+   495→   495→  if (!player.alive) return;
+   496→   496→  const P = player;
+   497→   497→
+   498→   498→  // thrust in world space (WASD), inertia + drag
+   499→   499→  let ax = (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
+   500→   500→  let ay = (K.KeyS || K.ArrowDown ? 1 : 0) - (K.KeyW || K.ArrowUp ? 1 : 0);
+   501→   501→  const mag = Math.hypot(ax, ay);
+   502→   502→  P.thrust = mag > 0 ? 1 : 0;
+   503→   503→  if (mag > 0) { ax /= mag; ay /= mag; }
+   504→   504→  P.vx += ax * PC.accel * dt;
+   505→   505→  P.vy += ay * PC.accel * dt;
+   506→   506→  const k = Math.exp(-PC.drag * dt);
+   507→   507→  P.vx *= k; P.vy *= k;
+   508→   508→  const sp = Math.hypot(P.vx, P.vy);
+   509→   509→  if (sp > PC.maxSpeed) { P.vx *= PC.maxSpeed / sp; P.vy *= PC.maxSpeed / sp; }
+   510→   510→  P.x += P.vx * dt; P.y += P.vy * dt;
+   511→   511→
+   512→   512→  // soft walls — bounce + squash so the box feels physical
+   513→   513→  const b = CFG.world.bound + PC.radius;
+   514→   514→  let bounced = 0;
+   515→   515→  if (P.x < b)     { P.x = b;     if (P.vx < 0) { P.vx *= -PC.wallBounce; bounced = 1; P.squashX = 0.16; } }
+   516→   516→  if (P.x > W - b) { P.x = W - b; if (P.vx > 0) { P.vx *= -PC.wallBounce; bounced = 1; P.squashX = 0.16; } }
+   517→   517→  if (P.y < b)     { P.y = b;     if (P.vy < 0) { P.vy *= -PC.wallBounce; bounced = 1; P.squashY = 0.16; } }
+   518→   518→  if (P.y > H - b) { P.y = H - b; if (P.vy > 0) { P.vy *= -PC.wallBounce; bounced = 1; P.squashY = 0.16; } }
+   519→   519→  if (bounced) { addTrauma(CFG.feel.traumaWall); puff(P.x, P.y, 4, 0x9d5cff, 70); }
+   520→   520→
+   521→   521→  // face the cursor (smoothed so aim stays readable)
+   522→   522→  const ta = Math.atan2(M.y - P.y, M.x - P.x);
+   523→   523→  P.angle = lerpAngle(P.angle, ta, damp(PC.turnLerp, dt));
+   524→   524→
+   525→   525→  // pink engine trail — rate scales with thrust and speed
+   526→   526→  P.trailAcc += P.thrust * (0.35 + 0.65 * sp / PC.maxSpeed) * PC.trailRate * dt;
+   527→   527→  while (P.trailAcc >= 1) {
+   528→   528→    P.trailAcc -= 1;
+   529→   529→    const back = P.angle + Math.PI;
+   530→   530→    emit({
+   531→   531→      tex: TEX.dot, tint: COL.trail,
+   532→   532→      x: P.x + Math.cos(back) * 14 + rand(-3, 3),
+   533→   533→      y: P.y + Math.sin(back) * 14 + rand(-3, 3),
+   534→   534→      vx: Math.cos(back) * rand(30, 90) + P.vx * 0.25,
+   535→   535→      vy: Math.sin(back) * rand(30, 90) + P.vy * 0.25,
+   536→   536→      life: rand(0.22, 0.42), size: rand(0.45, 0.85), drag: 3.5,
+   537→   537→    });
+   538→   538→  }
+   539→   539→
+   540→   540→  // fire
+   541→   541→  P.fireCd -= dt;
+   542→   542→  if (M.down && P.fireCd <= 0) {
+   543→   543→    P.fireCd = 1 / PC.fireRate;
+   544→   544→    fireBullet();
+   545→   545→  }
+   546→   546→
+   547→   547→  // i-frame blink
+   548→   548→  P.iframes = Math.max(0, P.iframes - dt);
+   549→   549→  P.flashT = Math.max(0, P.flashT - dt);
+   550→   550→
+   551→   551→  // sprite transform (thrust stretch + squash)
+   552→   552→  P.squashX = Math.max(0, P.squashX - dt * 1.4);
+   553→   553→  P.squashY = Math.max(0, P.squashY - dt * 1.4);
+   554→   554→  playerSpr.texture = P.flashT > 0 ? TEX.shipW : TEX.ship;
+   555→   555→  playerSpr.position.set(P.x, P.y);
+   556→   556→  playerSpr.rotation = P.angle;
+   557→   557→  playerSpr.scale.set((1 + P.thrust * 0.10) * (1 - P.squashX * 1.6), (1 - P.thrust * 0.06) * (1 - P.squashY * 1.6));
+   558→   558→  playerSpr.alpha = P.iframes > 0 ? (Math.sin(S.time * 42) > 0 ? 1 : 0.25) : 1;
+   559→   559→}
+   560→   560→
+   561→   561→function playerHit (dx, dy) {
+   562→   562→  const P = player;
+   563→   563→  P.hp -= 1;
+   564→   564→  P.iframes = PC.iframes;
+   565→   565→  S.flashA = CFG.feel.hurtFlash;
+   566→   566→  addTrauma(CFG.feel.traumaHurt);
+   567→   567→  hitstop(CFG.feel.hitstopHurt);
+   568→   568→  // knockback away from the drone
+   569→   569→  const d = Math.hypot(dx, dy) || 1;
+   570→   570→  P.vx += (dx / d) * 220; P.vy += (dy / d) * 220;
+   571→   571→  puff(P.x, P.y, 10, COL.player, 160);
+   572→   572→  A.hurt();
+   573→   573→  hudHP();
+   574→   574→  if (P.hp <= 0) playerDie();
+   575→   575→}
+   576→   576→
+   577→   577→function playerDie () {
+   578→   578→  const P = player;
+   579→   579→  P.alive = false;
+   580→   580→  playerSpr.visible = false;
+   581→   581→  M.down = false;
+   582→   582→  // big cyan/pink detonation
+   583→   583→  for (let i = 0; i < 26; i++) {
+   584→   584→    const a = rand(TAU), sp = rand(120, 520);
+   585→   585→    emit({ tex: TEX.spark, tint: Math.random() < 0.5 ? COL.player : COL.trail, x: P.x, y: P.y,
+   586→   586→      vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.4, 0.9), size: rand(0.6, 1.2), drag: 2.4, rot: rand(TAU) });
+   587→   587→  }
+   588→   588→  for (let i = 0; i < 6; i++) {
+   589→   589→    const a = rand(TAU), sp = rand(20, 110);
+   590→   590→    emit({ tex: TEX.dot, tint: COL.player, x: P.x, y: P.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+   591→   591→      life: rand(0.6, 1.1), size: rand(1.2, 2), grow: 1.6, drag: 1.4, alpha: 0.6 });
+   592→   592→  }
+   593→   593→  ring(P.x, P.y, COL.player, 3.2, 0.45);
+   594→   594→  ring(P.x, P.y, COL.trail, 2.2, 0.6);
+   595→   595→  addTrauma(1);
+   596→   596→  hitstop(0.09);
+   597→   597→  S.flashA = 0.32;
+   598→   598→  A.kill();
+   599→   599→  S.mode = 'dying';
+   600→   600→  S.dyingT = CFG.feel.dyingTime;
+   601→   601→  S.timescale = CFG.feel.dyingSlowmo;
+   602→   602→}
+   603→   603→
+   604→   604→/* ===== 05 BULLETS ===== */
+   605→   605→const bulletPool = makePool(CFG.pools.bullets, () => spriteOf(TEX.bullet), bulletL);
+   606→   606→
+   607→   607→function fireBullet () {
+   608→   608→  const P = player;
+   609→   609→  const b = bulletPool.get();
+   610→   610→  if (!b) return;
+   611→   611→  const a = P.angle + rand(-PC.bulletSpread, PC.bulletSpread);
+   612→   612→  b.x = P.x + Math.cos(P.angle) * 18;
+   613→   613→  b.y = P.y + Math.sin(P.angle) * 18;
+   614→   614→  b.vx = Math.cos(a) * PC.bulletSpeed;
+   615→   615→  b.vy = Math.sin(a) * PC.bulletSpeed;
+   616→   616→  b.life = PC.bulletLife;
+   617→   617→  b.rotation = a;
+   618→   618→  b.scale.set(rand(0.9, 1.1));
+   619→   619→  // muzzle flash
+   620→   620→  emit({ tex: TEX.dot, tint: COL.core, x: b.x, y: b.y, vx: Math.cos(a) * 60, vy: Math.sin(a) * 60, life: 0.07, size: 0.9, drag: 2 });
+   621→   621→  A.shoot();
+   622→   622→}
+   623→   623→
+   624→   624→function updateBullets (dt) {
+   625→   625→  for (const b of bulletPool.items) {
+   626→   626→    if (!b.active) continue;
+   627→   627→    b.life -= dt;
+   628→   628→    if (b.life <= 0 || b.x < -20 || b.x > W + 20 || b.y < -20 || b.y > H + 20) {
+   629→   629→      bulletPool.release(b); continue;
+   630→   630→    }
+   631→   631→    b.x += b.vx * dt; b.y += b.vy * dt;
+   632→   632→  }
+   633→   633→}
+   634→   634→
+   635→   635→/* ===== 06 ENEMIES — red drones ===== */
+   636→   636→const DC = CFG.drone;
+   637→   637→const dronePool = makePool(40, () => spriteOf(TEX.drone), droneL);
+   638→   638→const telePool = makePool(CFG.pools.teles, () => spriteOf(TEX.ring), fxL); // spawn telegraphs
+   639→   639→
+   640→   640→function droneSpeedFor (wave) {
+   641→   641→  return DC.baseSpeed * Math.min(DC.speedCap, 1 + (wave - 1) * DC.speedRamp);
+   642→   642→}
+   643→   643→
+   644→   644→function spawnPoint () {
+   645→   645→  const I = CFG.world.spawnInset, depth = 90;
+   646→   646→  for (let tries = 0; tries < 14; tries++) {
+   647→   647→    let x, y;
+   648→   648→    const edge = (Math.random() * 4) | 0;
+   649→   649→    if (edge === 0)      { x = rand(I, W - I); y = I + rand(depth); }
+   650→   650→    else if (edge === 1) { x = rand(I, W - I); y = H - I - rand(depth); }
+   651→   651→    else if (edge === 2) { x = I + rand(depth);        y = rand(I, H - I); }
+   652→   652→    else                 { x = W - I - rand(depth);    y = rand(I, H - I); }
+   653→   653→    if (Math.hypot(x - player.x, y - player.y) >= CFG.waves.minPlayerDist) return { x, y };
+   654→   654→  }
+   655→   655→  return { x: I + rand(40), y: I + rand(40) };
+   656→   656→}
+   657→   657→
+   658→   658→function telegraphSpawn () {
+   659→   659→  const t = telePool.get();
+   660→   660→  if (!t) return false;
+   661→   661→  const p = spawnPoint();
+   662→   662→  t.texture = TEX.ring; t.tint = COL.drone;
+   663→   663→  t.x = p.x; t.y = p.y;
+   664→   664→  t.t = CFG.waves.telegraph; t.dur = CFG.waves.telegraph;
+   665→   665→  t.x0 = p.x; t.y0 = p.y;
+   666→   666→  t.alpha = 0.9; t.scale.set(1.1);
+   667→   667→  return true;
+   668→   668→}
+   669→   669→
+   670→   670→function updateTeles (dt) {
+   671→   671→  for (const t of telePool.items) {
+   672→   672→    if (!t.active) continue;
+   673→   673→    t.t -= dt;
+   674→   674→    const k = clamp(t.t / t.dur, 0, 1);
+   675→   675→    t.scale.set(lerp(0.28, 1.1, k));
+   676→   676→    t.alpha = 0.35 + 0.65 * (1 - k) + 0.25 * Math.sin(S.time * 24);
+   677→   677→    if (t.t <= 0) {
+   678→   678→      telePool.release(t);
+   679→   679→      spawnDrone(t.x0, t.y0);
+   680→   680→    }
+   681→   681→  }
+   682→   682→}
+   683→   683→
+   684→   684→function spawnDrone (x, y) {
+   685→   685→  const d = dronePool.get();
+   686→   686→  if (!d) return;
+   687→   687→  d.x = x; d.y = y;
+   688→   688→  d.vx = 0; d.vy = 0;
+   689→   689→  d.hp = DC.hp;
+   690→   690→  d.phase = rand(TAU);
+   691→   691→  d.rotA = rand(TAU);
+   692→   692→  d.flashT = 0;
+   693→   693→  d.scale.set(0.1);
+   694→   694→  d.spawnK = 0;   // pop-in animation
+   695→   695→  puff(x, y, 6, COL.drone, 120);
+   696→   696→  ring(x, y, COL.drone, 1.1, 0.3);
+   697→   697→}
+   698→   698→
+   699→   699→function droneMaxSpeed (d) { return droneSpeedFor(Math.max(1, S.wave)); }
+   700→   700→
+   701→   701→function updateDrones (dt) {
+   702→   702→  const chasing = player.alive && (S.mode === 'playing');
+   703→   703→  const actives = [];
+   704→   704→  for (const d of dronePool.items) if (d.active) actives.push(d);
+   705→   705→
+   706→   706→  for (const d of actives) {
+   707→   707→    d.rotA += DC.spin * dt;
+   708→   708→    d.flashT = Math.max(0, d.flashT - dt);
+   709→   709→    d.spawnK = Math.min(1, d.spawnK + dt * 4.5);
+   710→   710→
+   711→   711→    if (chasing) {
+   712→   712→      // steer toward player with a sinusoidal weave so groups don't look robotic
+   713→   713→      const dx = player.x - d.x, dy = player.y - d.y;
+   714→   714→      const dist = Math.hypot(dx, dy) || 1;
+   715→   715→      const wob = Math.sin(S.time * DC.weaveFreq + d.phase) * DC.weaveAmp;
+   716→   716→      const ang = Math.atan2(dy, dx) + wob;
+   717→   717→      const ms = droneMaxSpeed(d);
+   718→   718→      const dvx = Math.cos(ang) * ms - d.vx;
+   719→   719→      const dvy = Math.sin(ang) * ms - d.vy;
+   720→   720→      const dl = Math.hypot(dvx, dvy) || 1;
+   721→   721→      const st = Math.min(DC.accel * dt, dl);
+   722→   722→      d.vx += (dvx / dl) * st; d.vy += (dvy / dl) * st;
+   723→   723→
+   724→   724→      // separation — keeps the swarm readable instead of one blob
+   725→   725→      for (const o of actives) {
+   726→   726→        if (o === d) continue;
+   727→   727→        const sx = d.x - o.x, sy = d.y - o.y;
+   728→   728→        const sd = Math.hypot(sx, sy);
+   729→   729→        if (sd > 0.01 && sd < DC.sepDist) {
+   730→   730→          d.vx += (sx / sd) * DC.sepForce * dt;
+   731→   731→          d.vy += (sy / sd) * DC.sepForce * dt;
+   732→   732→        }
+   733→   733→      }
+   734→   734→    } else {
+   735→   735→      d.vx *= Math.exp(-0.8 * dt); d.vy *= Math.exp(-0.8 * dt);
+   736→   736→    }
+   737→   737→
+   738→   738→    d.x += d.vx * dt; d.y += d.vy * dt;
+   739→   739→
+   740→   740→    // soft walls
+   741→   741→    const m = CFG.world.bound + 8;
+   742→   742→    if (d.x < m)     { d.x = m;     if (d.vx < 0) d.vx *= -0.5; }
+   743→   743→    if (d.x > W - m) { d.x = W - m; if (d.vx > 0) d.vx *= -0.5; }
+   744→   744→    if (d.y < m)     { d.y = m;     if (d.vy < 0) d.vy *= -0.5; }
+   745→   745→    if (d.y > H - m) { d.y = H - m; if (d.vy > 0) d.vy *= -0.5; }
+   746→   746→
+   747→   747→    // visuals
+   748→   748→    d.texture = d.flashT > 0 ? TEX.droneW : TEX.drone;
+   749→   749→    d.rotation = d.rotA;
+   750→   750→    const pulse = 1 + Math.sin(S.time * DC.pulseRate + d.phase) * DC.pulseAmp;
+   751→   751→    const popIn = 1 - Math.pow(1 - d.spawnK, 3); // ease-out back-ish
+   752→   752→    d.scale.set(popIn * pulse * (d.spawnK < 1 ? 1.15 : 1));
+   753→   753→  }
+   754→   754→
+   755→   755→  // contact damage
+   756→   756→  if (chasing && player.iframes <= 0) {
+   757→   757→    for (const d of actives) {
+   758→   758→      const rr = PC.radius + DC.radius;
+   759→   759→      if (Math.abs(d.x - player.x) < rr && Math.abs(d.y - player.y) < rr) {
+   760→   760→        const dist = Math.hypot(d.x - player.x, d.y - player.y);
+   761→   761→        if (dist < rr) {
+   762→   762→          killDrone(d, false);          // the kamikaze drone pops too — no score
+   763→   763→          playerHit(player.x - d.x, player.y - d.y);
+   764→   764→          break;
+   765→   765→        }
+   766→   766→      }
+   767→   767→    }
+   768→   768→  }
+   769→   769→}
+   770→   770→
+   771→   771→/* ===== 07 COLLISIONS — bullets vs drones ===== */
+   772→   772→function collideBullets () {
+   773→   773→  for (const b of bulletPool.items) {
+   774→   774→    if (!b.active) continue;
+   775→   775→    for (const d of dronePool.items) {
+   776→   776→      if (!d.active) continue;
+   777→   777→      const rr = PC.bulletRadius + DC.radius;
+   778→   778→      if (Math.abs(b.x - d.x) < rr && Math.abs(b.y - d.y) < rr) {
+   779→   779→        if (Math.hypot(b.x - d.x, b.y - d.y) < rr) {
+   780→   780→          bulletPool.release(b);
+   781→   781→          hitDrone(d, b.vx, b.vy);
+   782→   782→          break;
+   783→   783→        }
+   784→   784→      }
+   785→   785→    }
+   786→   786→  }
+   787→   787→}
+   788→   788→
+   789→   789→function hitDrone (d, bvx, bvy) {
+   790→   790→  d.hp -= 1;
+   791→   791→  if (d.hp > 0) {
+   792→   792→    d.flashT = 0.07;
+   793→   793→    const bl = Math.hypot(bvx, bvy) || 1;
+   794→   794→    d.vx += (bvx / bl) * 190; d.vy += (bvy / bl) * 190;
+   795→   795→    puff(d.x, d.y, 3, COL.droneHi, 110);
+   796→   796→    return;
+   797→   797→  }
+   798→   798→  killDrone(d, true);
+   799→   799→}
+   800→   800→
+   801→   801→function killDrone (d, giveScore) {
+   802→   802→  const x = d.x, y = d.y;
+   803→   803→  dronePool.release(d);
+   804→   804→  burstKill(x, y);
+   805→   805→  ring(x, y, COL.drone, 1.9, 0.3);
+   806→   806→  ghost(x, y, TEX.droneW, 1);
+   807→   807→  addTrauma(CFG.feel.traumaKill);
+   808→   808→  hitstop(CFG.feel.hitstopKill);
+   809→   809→  S.gridPulse += CFG.feel.gridPulseKill;
+   810→   810→  A.kill();
+   811→   811→  if (giveScore) {
+   812→   812→    S.score += DC.score;
+   813→   813→    S.kills += 1;
+   814→   814→    popup(x, y, '+' + DC.score, COL.core);
+   815→   815→    hudScore();
+   816→   816→    checkNewBest();
+   817→   817→  }
+   818→   818→}
+   819→   819→
+   820→   820→/* ===== 08 WAVES — budget spawner with breathers ===== */
+   821→   821→const Wv = { n: 0, toSpawn: 0, spawnCd: 0, phase: 'idle', breatherT: 0 };
+   822→   822→// phase: idle (title) | spawning | breather
+   823→   823→
+   824→   824→function startWave (n) {
+   825→   825→  Wv.n = n; S.wave = n;
+   826→   826→  Wv.toSpawn = CFG.waves.quota(n);
+   827→   827→  Wv.spawnCd = 0.6;
+   828→   828→  Wv.phase = 'spawning';
+   829→   829→  banner('WAVE ' + n, COL.text, 40, 1.5);
+   830→   830→  hudWave();
+   831→   831→}
+   832→   832→
+   833→   833→function wavesUpdate (dt) {
+   834→   834→  if (S.mode !== 'playing') return;
+   835→   835→  if (Wv.phase === 'spawning') {
+   836→   836→    if (Wv.toSpawn > 0) {
+   837→   837→      Wv.spawnCd -= dt;
+   838→   838→      const cap = Math.min(DC.maxActive, 8 + Wv.n * 2);
+   839→   839→      if (Wv.spawnCd <= 0 && dronePool.countActive() + telePool.countActive() < cap) {
+   840→   840→        if (telegraphSpawn()) {
+   841→   841→          Wv.toSpawn -= 1;
+   842→   842→          Wv.spawnCd = CFG.waves.spawnInterval(Wv.n) * rand(0.75, 1.25);
+   843→   843→        }
+   844→   844→      }
+   845→   845→    } else if (dronePool.countActive() === 0 && telePool.countActive() === 0) {
+   846→   846→      Wv.phase = 'breather';
+   847→   847→      Wv.breatherT = CFG.waves.breather;
+   848→   848→      popup(W / 2, H / 2 - 60, 'WAVE CLEAR', COL.player, 22);
+   849→   849→    }
+   850→   850→  } else if (Wv.phase === 'breather') {
+   851→   851→    Wv.breatherT -= dt;
+   852→   852→    if (Wv.breatherT <= 0) startWave(Wv.n + 1);
+   853→   853→  }
+   854→   854→}
+   855→   855→
+   856→   856→/* ===== 09 SCORING + HUD (crisp layer, outside bloom) ===== */
+   857→   857→function pad (n, l) { return String(Math.max(0, n | 0)).padStart(l, '0'); }
+   858→   858→function mkText (str, size, weight, color, ls = 0, align = 'center') {
+   859→   859→  return new PIXI.Text({
+   860→   860→    text: str,
+   861→   861→    style: {
+   862→   862→      fontFamily: 'Orbitron, Arial', fontSize: size, fontWeight: String(weight),
+   863→   863→      fill: color, letterSpacing: ls, align,
+   864→   864→    },
+   865→   865→  });
+   866→   866→}
+   867→   867→
+   868→   868→const scoreT = mkText('SCORE 000000', 20, 700, COL.text, 2, 'left');
+   869→   869→scoreT.anchor.set(0, 0); scoreT.position.set(22, 16);
+   870→   870→const bestT = mkText('BEST 000000', 12, 500, COL.textDim, 2, 'left');
+   871→   871→bestT.anchor.set(0, 0); bestT.position.set(22, 44);
+   872→   872→const waveT = mkText('WAVE 1', 15, 700, '#b98cff', 4);
+   873→   873→waveT.anchor.set(0.5, 0); waveT.position.set(W / 2, 18);
+   874→   874→const hpPips = [];
+   875→   875→for (let i = 0; i < PC.hp; i++) {
+   876→   876→  const p = new PIXI.Sprite(TEX.ship);
+   877→   877→  p.anchor.set(0.5); p.scale.set(0.62);
+   878→   878→  p.position.set(W - 30 - i * 34, 30);
+   879→   879→  p.rotation = Math.PI / 2;
+   880→   880→  crisp.addChild(p); hpPips.push(p);
+   881→   881→}
+   882→   882→crisp.addChild(scoreT, bestT, waveT);
+   883→   883→
+   884→   884→function hudScore () {
+   885→   885→  scoreT.text = 'SCORE ' + pad(S.score, 6);
+   886→   886→  bestT.text = 'BEST ' + pad(S.bestBeaten ? S.score : S.best, 6);
+   887→   887→}
+   888→   888→function hudWave () { waveT.text = 'WAVE ' + Math.max(1, S.wave); }
+   889→   889→function hudHP () { for (let i = 0; i < hpPips.length; i++) hpPips[i].alpha = i < player.hp ? 1 : 0.13; }
+   890→   890→
+   891→   891→function checkNewBest () {
+   892→   892→  if (!S.bestBeaten && S.best > 0 && S.score > S.best) {
+   893→   893→    S.bestBeaten = true;
+   894→   894→    popup(W / 2, 90, 'NEW BEST!', COL.player, 24);
+   895→   895→    bestT.text = 'BEST ' + pad(S.score, 6);
+   896→   896→    addTrauma(0.2);
+   897→   897→  }
+   898→   898→}
+   899→   899→
+   900→   900→// Wave banner (single pooled text, animated in the loop)
+   901→   901→const bannerT = mkText('', 40, 900, COL.text, 8);
+   902→   902→bannerT.anchor.set(0.5); bannerT.position.set(W / 2, H * 0.4);
+   903→   903→bannerT.visible = false;
+   904→   904→crisp.addChild(bannerT);
+   905→   905→const bannerSt = { t: 0, dur: 0 };
+   906→   906→function banner (txt, color, size, dur) {
+   907→   907→  bannerT.text = txt; bannerT.style.fill = color; bannerT.style.fontSize = size;
+   908→   908→  bannerSt.t = 0; bannerSt.dur = dur;
+   909→   909→  bannerT.visible = true; bannerT.alpha = 0; bannerT.scale.set(1.35);
+   910→   910→}
+   911→   911→function updateBanner (dt) {
+   912→   912→  if (!bannerT.visible) return;
+   913→   913→  bannerSt.t += dt;
+   914→   914→  const k = bannerSt.t / bannerSt.dur;
+   915→   915→  if (k >= 1) { bannerT.visible = false; return; }
+   916→   916→  const inK = clamp(bannerSt.t / 0.18, 0, 1);
+   917→   917→  const outK = clamp((bannerSt.dur - bannerSt.t) / 0.3, 0, 1);
+   918→   918→  bannerT.alpha = Math.min(inK, outK);
+   919→   919→  bannerT.scale.set(lerp(1.35, 1, inK));
+   920→   920→}
+   921→   921→
+   922→   922→/* ===== 10 OVERLAYS — title / game over / pause ===== */
+   923→   923→const titleC = new PIXI.Container();
+   924→   924→const overC = new PIXI.Container();
+   925→   925→const pauseC = new PIXI.Container();
+   926→   926→overlayRoot.addChild(titleC, overC, pauseC);
+   927→   927→let promptT, overPromptT;
+   928→   928→
+   929→   929→{
+   930→   930→  const dim = new PIXI.Graphics().rect(0, 0, W, H).fill({ color: 0x05010a, alpha: 0.35 });
+   931→   931→  titleC.addChild(dim);
+   932→   932→  const tMag = mkText('NEON VOID', 76, 900, '#ff2ec4', 6);
+   933→   933→  tMag.anchor.set(0.5); tMag.position.set(W / 2 + 4, H * 0.34 + 4); tMag.alpha = 0.85; tMag.blendMode = 'add';
+   934→   934→  const tCyan = mkText('NEON VOID', 76, 900, '#2cf6ff', 6);
+   935→   935→  tCyan.anchor.set(0.5); tCyan.position.set(W / 2, H * 0.34);
+   936→   936→  const sub = mkText('TOP-DOWN NEON ARENA', 15, 500, COL.textDim, 7);
+   937→   937→  sub.anchor.set(0.5); sub.position.set(W / 2, H * 0.34 + 60);
+   938→   938→  promptT = mkText('CLICK TO START', 20, 700, COL.text, 3);
+   939→   939→  promptT.anchor.set(0.5); promptT.position.set(W / 2, H * 0.55);
+   940→   940→  const c1 = mkText('WASD — MOVE      MOUSE — AIM      HOLD LMB — FIRE', 13, 500, COL.textDim, 1);
+   941→   941→  c1.anchor.set(0.5); c1.position.set(W / 2, H * 0.55 + 44);
+   942→   942→  const c2 = mkText('P — PAUSE      M — MUTE      R — RETRY (ON GAME OVER)', 12, 500, COL.textDim, 1);
+   943→   943→  c2.anchor.set(0.5); c2.position.set(W / 2, H * 0.55 + 68);
+   944→   944→  titleC.addChild(tMag, tCyan, sub, promptT, c1, c2);
+   945→   945→}
+   946→   946→const overScore = mkText('', 26, 700, COL.text, 3);
+   947→   947→const overBest = mkText('', 16, 500, COL.textDim, 2);
+   948→   948→const overWave = mkText('', 14, 500, COL.textDim, 2);
+   949→   949→{
+   950→   950→  const dim = new PIXI.Graphics().rect(0, 0, W, H).fill({ color: 0x05010a, alpha: 0.62 });
+   951→   951→  overC.addChild(dim);
+   952→   952→  const goMag = mkText('GAME OVER', 58, 900, '#ff2b4e', 5);
+   953→   953→  goMag.anchor.set(0.5); goMag.position.set(W / 2 + 3, H * 0.32 + 3); goMag.alpha = 0.8; goMag.blendMode = 'add';
+   954→   954→  const goCyan = mkText('GAME OVER', 58, 900, '#2cf6ff', 5);
+   955→   955→  goCyan.anchor.set(0.5); goCyan.position.set(W / 2, H * 0.32);
+   956→   956→  overScore.anchor.set(0.5); overScore.position.set(W / 2, H * 0.48);
+   957→   957→  overBest.anchor.set(0.5); overBest.position.set(W / 2, H * 0.48 + 38);
+   958→   958→  overWave.anchor.set(0.5); overWave.position.set(W / 2, H * 0.48 + 62);
+   959→   959→  overPromptT = mkText('PRESS R OR CLICK TO RETRY', 18, 700, COL.text, 3);
+   960→   960→  overPromptT.anchor.set(0.5); overPromptT.position.set(W / 2, H * 0.62);
+   961→   961→  overC.addChild(goMag, goCyan, overScore, overBest, overWave, overPromptT);
+   962→   962→}
+   963→   963→{
+   964→   964→  const dim = new PIXI.Graphics().rect(0, 0, W, H).fill({ color: 0x05010a, alpha: 0.45 });
+   965→   965→  pauseC.addChild(dim);
+   966→   966→  const pt = mkText('PAUSED', 42, 900, '#2cf6ff', 8);
+   967→   967→  pt.anchor.set(0.5); pt.position.set(W / 2, H * 0.42);
+   968→   968→  const pp = mkText('CLICK OR P TO RESUME', 15, 500, COL.textDim, 3);
+   969→   969→  pp.anchor.set(0.5); pp.position.set(W / 2, H * 0.42 + 48);
+   970→   970→  pauseC.addChild(pt, pp);
+   971→   971→}
+   972→   972→function hideOverlays () { titleC.visible = overC.visible = pauseC.visible = false; }
+   973→   973→
+   974→   974→function showTitle () {
+   975→   975→  hideOverlays();
+   976→   976→  titleC.visible = true;
+   977→   977→  S.mode = 'title';
+   978→   978→}
+   979→   979→function toOver () {
+   980→   980→  S.mode = 'over'; S.timescale = 1;
+   981→   981→  const isBest = S.score > S.best && S.score > 0;
+   982→   982→  if (isBest) {
+   983→   983→    S.best = S.score;
+   984→   984→    try { localStorage.setItem('neonvoid_best', String(S.best)); } catch (e) {}
+   985→   985→  }
+   986→   986→  overScore.text = 'SCORE ' + pad(S.score, 6);
+   987→   987→  overBest.text = (S.bestBeaten ? '★ NEW BEST  ' : '') + 'BEST ' + pad(S.best, 6);
+   988→   988→  overWave.text = 'REACHED WAVE ' + Math.max(1, S.wave);
+   989→   989→  hudScore();
+   990→   990→  overC.visible = true;
+   991→   991→}
+   992→   992→function setPause (v) {
+   993→   993→  if (v && S.mode === 'playing') { S.mode = 'paused'; pauseC.visible = true; }
+   994→   994→  else if (!v && S.mode === 'paused') { S.mode = 'playing'; pauseC.visible = false; }
+   995→   995→}
+   996→   996→
+   997→   997→/* ===== 11 AUDIO — Web Audio synth, zero files ===== */
+   998→   998→const A = (() => {
+   999→   999→  let ctx = null, master = null, noiseBuf = null, muted = false;
+  1000→  1000→  function init () {
+  1001→  1001→    if (ctx) return;
+  1002→  1002→    const AC = window.AudioContext || window.webkitAudioContext;
+  1003→  1003→    if (!AC) return;
+  1004→  1004→    ctx = new AC();
+  1005→  1005→    master = ctx.createGain();
+  1006→  1006→    master.gain.value = CFG.audio.master;
+  1007→  1007→    master.connect(ctx.destination);
+  1008→  1008→    noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 0.5 | 0, ctx.sampleRate);
+  1009→  1009→    const d = noiseBuf.getChannelData(0);
+  1010→  1010→    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  1011→  1011→  }
+  1012→  1012→  function resume () { if (ctx && ctx.state === 'suspended') ctx.resume(); }
+  1013→  1013→  function tone ({ type, f0, f1, dur, vol }) {
+  1014→  1014→    if (!ctx || muted) return;
+  1015→  1015→    const t = ctx.currentTime;
+  1016→  1016→    const o = ctx.createOscillator(), g = ctx.createGain();
+  1017→  1017→    o.type = type;
+  1018→  1018→    o.frequency.setValueAtTime(Math.max(1, f0), t);
+  1019→  1019→    o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
+  1020→  1020→    g.gain.setValueAtTime(vol, t);
+  1021→  1021→    g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+  1022→  1022→    o.connect(g); g.connect(master);
+  1023→  1023→    o.start(t); o.stop(t + dur + 0.03);
+  1024→  1024→  }
+  1025→  1025→  function noise ({ dur, vol, lp0, lp1 }) {
+  1026→  1026→    if (!ctx || muted) return;
+  1027→  1027→    const t = ctx.currentTime;
+  1028→  1028→    const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+  1029→  1029→    const f = ctx.createBiquadFilter(); f.type = 'lowpass';
+  1030→  1030→    f.frequency.setValueAtTime(Math.max(40, lp0), t);
+  1031→  1031→    f.frequency.exponentialRampToValueAtTime(Math.max(40, lp1), t + dur);
+  1032→  1032→    const g = ctx.createGain();
+  1033→  1033→    g.gain.setValueAtTime(vol, t);
+  1034→  1034→    g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+  1035→  1035→    src.connect(f); f.connect(g); g.connect(master);
+  1036→  1036→    src.start(t); src.stop(t + dur + 0.03);
+  1037→  1037→  }
+  1038→  1038→  return {
+  1039→  1039→    init, resume,
+  1040→  1040→    shoot () { const c = CFG.audio.shoot; tone({ type: c.type, f0: c.f0 * rand(0.94, 1.06), f1: c.f0 * c.fMul, dur: c.dur, vol: c.vol }); },
+  1041→  1041→    kill ()  { const c = CFG.audio.kill; noise(c.noise); tone(c.tone); },
+  1042→  1042→    hurt ()  { const c = CFG.audio.hurt; tone(c.tone); noise(c.noise); },
+  1043→  1043→    toggleMute () { muted = !muted; if (master) master.gain.value = muted ? 0 : CFG.audio.master; return muted; },
+  1044→  1044→  };
+  1045→  1045→})();
+  1046→  1046→
+  1047→  1047→/* ===== 12 INPUT ===== */
+  1048→  1048→const K = {};
+  1049→  1049→const M = { x: W / 2, y: H / 2 - 120, down: false };
+  1050→  1050→
+  1051→  1051→function toWorld (e) {
+  1052→  1052→  const r = app.canvas.getBoundingClientRect();
+  1053→  1053→  return {
+  1054→  1054→    x: (e.clientX - r.left - offX) / scaleS,
+  1055→  1055→    y: (e.clientY - r.top - offY) / scaleS,
+  1056→  1056→  };
+  1057→  1057→}
+  1058→  1058→window.addEventListener('keydown', e => {
+  1059→  1059→  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+  1060→  1060→  K[e.code] = true;
+  1061→  1061→  A.init(); A.resume();
+  1062→  1062→  if (e.code === 'KeyM') {
+  1063→  1063→    const m = A.toggleMute();
+  1064→  1064→    popup(M.x, M.y - 20, m ? 'MUTED' : 'SOUND ON', COL.textDim, 13);
+  1065→  1065→  } else if (S.mode === 'title' && (e.code === 'Space' || e.code === 'Enter')) startRun();
+  1066→  1066→  else if (S.mode === 'over' && (e.code === 'KeyR' || e.code === 'Space' || e.code === 'Enter')) startRun();
+  1067→  1067→  else if (e.code === 'KeyP' || e.code === 'Escape') {
+  1068→  1068→    if (S.mode === 'playing') setPause(true);
+  1069→  1069→    else if (S.mode === 'paused') setPause(false);
+  1070→  1070→  }
+  1071→  1071→});
+  1072→  1072→window.addEventListener('keyup', e => { K[e.code] = false; });
+  1073→  1073→
+  1074→  1074→app.canvas.addEventListener('pointermove', e => {
+  1075→  1075→  const w = toWorld(e);
+  1076→  1076→  M.x = w.x; M.y = w.y;
+  1077→  1077→});
+  1078→  1078→app.canvas.addEventListener('pointerdown', e => {
+  1079→  1079→  A.init(); A.resume();
+  1080→  1080→  const w = toWorld(e);
+  1081→  1081→  M.x = w.x; M.y = w.y;
+  1082→  1082→  if (S.mode === 'title' || S.mode === 'over') startRun();
+  1083→  1083→  else if (S.mode === 'paused') setPause(false);
+  1084→  1084→  else if (S.mode === 'playing') M.down = true;
+  1085→  1085→});
+  1086→  1086→window.addEventListener('pointerup', () => { M.down = false; });
+  1087→  1087→window.addEventListener('pointercancel', () => { M.down = false; });
+  1088→  1088→window.addEventListener('blur', () => { M.down = false; if (S.mode === 'playing') setPause(true); });
+  1089→  1089→app.canvas.addEventListener('contextmenu', e => e.preventDefault());
+  1090→  1090→
+  1091→  1091→/* ===== 13 RUN CONTROL + MAIN LOOP ===== */
+  1092→  1092→function startRun () {
+  1093→  1093→  hideOverlays();
+  1094→  1094→  S.score = 0; S.kills = 0; S.bestBeaten = false; S.wave = 0;
+  1095→  1095→  S.timescale = 1; S.hitstop = 0; S.trauma = 0; S.flashA = 0;
+  1096→  1096→  S.gridPulse = 0; S.dyingT = 0;
+  1097→  1097→  bulletPool.releaseAll(); partPool.releaseAll(); ringPool.releaseAll();
+  1098→  1098→  ghostPool.releaseAll(); popupPool.releaseAll(); telePool.releaseAll();
+  1099→  1099→  dronePool.releaseAll();
+  1100→  1100→  playerReset();
+  1101→  1101→  hudScore(); hudHP();
+  1102→  1102→  Wv.phase = 'idle';
+  1103→  1103→  S.mode = 'playing';
+  1104→  1104→  startWave(1);
+  1105→  1105→}
+  1106→  1106→
+  1107→  1107→app.ticker.add(tk => {
+  1108→  1108→  const rawDt = Math.min(tk.deltaMS, 34) / 1000;
+  1109→  1109→  let dt;
+  1110→  1110→  if (S.hitstop > 0) { S.hitstop -= rawDt; dt = 0; }
+  1111→  1111→  else dt = rawDt * S.timescale;
+  1112→  1112→  S.time += dt;
+  1113→  1113→
+  1114→  1114→  fxUpdate(dt, rawDt);
+  1115→  1115→  reticle.position.set(M.x, M.y);
+  1116→  1116→  reticle.alpha = 0.7 + 0.3 * Math.sin(S.time * 6);
+  1117→  1117→  reticle.rotation = S.time * 0.6;
+  1118→  1118→
+  1119→  1119→  if (S.mode === 'playing') {
+  1120→  1120→    playerUpdate(dt);
+  1121→  1121→    updateBullets(dt);
+  1122→  1122→    updateTeles(dt);
+  1123→  1123→    updateDrones(dt);
+  1124→  1124→    collideBullets();
+  1125→  1125→    wavesUpdate(dt);
+  1126→  1126→  } else if (S.mode === 'dying') {
+  1127→  1127→    updateBullets(dt); updateTeles(dt); updateDrones(dt); collideBullets();
+  1128→  1128→    S.dyingT -= rawDt;
+  1129→  1129→    if (S.dyingT <= 0) toOver();
+  1130→  1130→  } else if (S.mode === 'over') {
+  1131→  1131→    updateBullets(dt); updateDrones(dt);
+  1132→  1132→  }
+  1133→  1133→
+  1134→  1134→  updateParticles(dt); updateRings(dt); updateGhosts(dt); updatePopups(dt);
+  1135→  1135→  updateBanner(dt);
+  1136→  1136→
+  1137→  1137→  if (titleC.visible) promptT.alpha = 0.55 + 0.45 * Math.sin(S.time * 4.2);
+  1138→  1138→  if (overC.visible) overPromptT.alpha = 0.55 + 0.45 * Math.sin(S.time * 4.2);
+  1139→  1139→});
+  1140→  1140→
+  1141→  1141→// Dev hooks (?debug=1)
+  1142→  1142→if (location.search.includes('debug')) {
+  1143→  1143→  window.NV = { app, S, CFG, player, dronePool, bulletPool, spawnDrone, startRun, killAll: () => dronePool.releaseAll() };
+  1144→  1144→}
+  1145→  1145→
+  1146→  1146→resize();
+  1147→  1147→hudScore(); hudHP(); hudWave();
+  1148→  1148→showTitle();
+  1149→  1149→
+  1150→  1150→})().catch(err => {
+  1151→  1151→  console.error('[NeonVoid] boot failure:', err);
+  1152→  1152→  const el = document.getElementById('boot-error');
+  1153→  1153→  if (el) { el.style.display = 'flex'; el.innerHTML += '<br><small>' + (err && err.message ? err.message : err) + '</small>'; }
+  1154→  1154→});
+  1155→  1155→
+  1156→  1156→</script>
+  1157→  1157→</body>
+  1158→  1158→</html>
+  1159→  1159→

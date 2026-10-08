@@ -1,0 +1,148 @@
+
+/* ===== 12 INPUT ===== */
+const K = {};
+const M = { x: W / 2, y: H / 2 - 120, down: false };
+
+function toWorld (e) {
+  const r = app.canvas.getBoundingClientRect();
+  return {
+    x: (e.clientX - r.left - offX) / scaleS,
+    y: (e.clientY - r.top - offY) / scaleS,
+  };
+}
+window.addEventListener('keydown', e => {
+  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+  K[e.code] = true;
+  A.init(); A.resume();
+  if (e.code === 'KeyM') {
+    const m = A.toggleMute();
+    popup(M.x, M.y - 20, m ? 'MUTED' : 'SOUND ON', COL.textDim, 13);
+  } else if (e.code === 'KeyF') {
+    META.autoFire = !META.autoFire; saveMeta();
+    popup(M.x, M.y - 20, 'AUTO-FIRE ' + (META.autoFire ? 'ON' : 'OFF'), COL.textDim, 13);
+    A.ui();
+  } else if ((S.mode === 'title') && (e.code === 'Space' || e.code === 'Enter')) startRun();
+  else if ((S.mode === 'over') && (e.code === 'KeyR' || e.code === 'Space' || e.code === 'Enter')) startRun();
+  else if (S.mode === 'over' && e.code === 'Escape') showTitle();
+  else if (S.mode === 'paused' && e.code === 'KeyQ') showTitle();
+  else if (e.code === 'KeyP' || e.code === 'Escape') {
+    if (S.mode === 'playing') setPause(true);
+    else if (S.mode === 'paused') setPause(false);
+  }
+});
+window.addEventListener('keyup', e => { K[e.code] = false; });
+
+app.canvas.addEventListener('pointermove', e => {
+  const w = toWorld(e);
+  M.x = w.x; M.y = w.y;
+});
+app.canvas.addEventListener('pointerdown', e => {
+  A.init(); A.resume();
+  const w = toWorld(e);
+  M.x = w.x; M.y = w.y;
+  if (S.mode === 'title' || S.mode === 'over') startRun();
+  else if (S.mode === 'paused') setPause(false);
+  else if (S.mode === 'playing') M.down = true;
+});
+window.addEventListener('pointerup', () => { M.down = false; });
+window.addEventListener('pointercancel', () => { M.down = false; });
+window.addEventListener('blur', () => { M.down = false; if (S.mode === 'playing') setPause(true); });
+app.canvas.addEventListener('contextmenu', e => e.preventDefault());
+// audio unlock from the DOM menu too
+window.addEventListener('pointerdown', () => { A.init(); A.resume(); }, { capture: true });
+
+// static menu controls — start button + auto-fire toggle
+const startBtnEl = document.getElementById('startBtn');
+if (startBtnEl) startBtnEl.addEventListener('click', () => { A.init(); A.resume(); startRun(); });
+const afToggleEl = document.getElementById('afToggle');
+if (afToggleEl) afToggleEl.addEventListener('change', e => { if (window.NVUI) NVUI.setAF(e.target.checked); });
+
+/* ===== 13 RUN CONTROL + MAIN LOOP ===== */
+function startRun () {
+  hideOverlays();
+  const ui = document.getElementById('ui');
+  if (ui) ui.style.display = 'none';
+  S.score = 0; S.kills = 0; S.bestBeaten = false; S.wave = 0; S.tier = 1;
+  S.runCoins = 0; S.combo = 0; S.comboT = 0;
+  S.timescale = 1; S.hitstop = 0; S.trauma = 0; S.flashA = 0;
+  S.gridPulse = 0; S.dyingT = 0; S.rgbT = 0;
+  bulletPool.releaseAll(); ebPool.releaseAll();
+  partPool.releaseAll(); ringPool.releaseAll();
+  ghostPool.releaseAll(); popupPool.releaseAll(); telePool.releaseAll();
+  enemyPool.releaseAll(); pickupPool.releaseAll();
+  playerReset();
+  buildHpPips();
+  hudScore(); hudHP(); hudGun();
+  Wv.phase = 'idle';
+  S.mode = 'playing';
+  startWave(1);
+}
+
+app.ticker.add(tk => {
+  const rawDt = Math.min(tk.deltaMS, 34) / 1000;
+  let dt;
+  if (S.hitstop > 0) { S.hitstop -= rawDt; dt = 0; }
+  else dt = rawDt * S.timescale;
+  S.time += dt;
+
+  fxUpdate(dt, rawDt);
+  reticle.position.set(M.x, M.y);
+  reticle.visible = S.mode === 'playing' || S.mode === 'dying' || S.mode === 'paused';
+  reticle.alpha = 0.7 + 0.3 * Math.sin(S.time * 6);
+  reticle.rotation = S.time * 0.6;
+
+  if (S.mode === 'playing') {
+    playerUpdate(dt);
+    updateBullets(dt);
+    updateEBullets(dt);
+    updateTeles(dt);
+    updateEnemies(dt);
+    collideBullets();
+    updatePickups(dt);
+    wavesUpdate(dt);
+    hudCombo(dt);
+  } else if (S.mode === 'dying') {
+    updateBullets(dt); updateEBullets(dt); updateTeles(dt);
+    updateEnemies(dt); collideBullets(); updatePickups(dt);
+    S.dyingT -= rawDt;
+    if (S.dyingT <= 0) toOver();
+  } else if (S.mode === 'over') {
+    updateBullets(dt); updateEBullets(dt); updateEnemies(dt); updatePickups(dt);
+  }
+
+  updateParticles(dt); updateRings(dt); updateGhosts(dt); updatePopups(dt);
+  updateBanner(dt);
+
+  if (overC.visible) overPromptT.alpha = 0.55 + 0.45 * Math.sin(S.time * 4.2);
+});
+
+// Dev hooks (?debug=1)
+if (location.search.includes('debug')) {
+  window.NV = {
+    app, S, CFG, META, player, DIFF,
+    pools: { bullet: bulletPool, eb: ebPool, enemy: enemyPool, pickup: pickupPool,
+             tele: telePool, part: partPool, ring: ringPool, ghost: ghostPool, popup: popupPool },
+    spawnEnemy, startRun, showTitle, toOver,
+    Wv, startWave, telegraphSpawn,
+    killAll: () => { enemyPool.releaseAll(); telePool.releaseAll(); ebPool.releaseAll(); },
+    giveGun: n => { player.gun = clamp(n || player.gun + 1, 1, 5); S.gun = player.gun; hudGun(); },
+    addCR: n => { S.runCoins += (n || 50); hudScore(); },
+    addCoins: n => { META.coins += (n || 100); saveMeta(); renderTitle(); },
+    forceKill: () => { for (const d of enemyPool.items) if (d.active) killEnemy(d, true); },
+    hitMe: () => playerHit(1, 0),
+  };
+}
+
+resize();
+hudScore(); hudHP();
+showTitle();
+
+})().catch(err => {
+  console.error('[NeonVoid] boot failure:', err);
+  const el = document.getElementById('boot-error');
+  if (el) { el.style.display = 'flex'; el.innerHTML += '<br><small>' + (err && err.message ? err.message : err) + '</small>'; }
+});
+
+</script>
+</body>
+</html>

@@ -1,0 +1,1989 @@
+     1→<!DOCTYPE html>
+     2→<html lang="en">
+     3→<head>
+     4→<meta charset="UTF-8">
+     5→<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+     6→<title>NEON VOID</title>
+     7→<link rel="preconnect" href="https://fonts.googleapis.com">
+     8→<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+     9→<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+    10→<style>
+    11→  html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#05010a; }
+    12→  canvas { display:block; cursor:none; }
+    13→  #boot-error {
+    14→    position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+    15→    color:#eaf6ff; font-family:Arial, sans-serif; background:#05010a; z-index:10;
+    16→    text-align:center; padding:24px; line-height:1.8;
+    17→  }
+    18→  /* ---- DOM menu layer (letterboxed exactly like the canvas world) ---- */
+    19→  #ui { position:absolute; transform-origin:0 0; display:none; cursor:default; z-index:5;
+    20→        font-family:'Orbitron', Arial, sans-serif; user-select:none; }
+    21→  #title { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center;
+    22→           justify-content:center; gap:13px;
+    23→           background: radial-gradient(ellipse at 50% 40%, rgba(34,0,66,.38), rgba(5,1,10,.86)); }
+    24→  .logo { font-weight:900; font-size:62px; letter-spacing:10px; color:#2cf6ff;
+    25→          text-shadow:0 0 8px #2cf6ff, 0 0 30px rgba(44,246,255,.55), 3px 3px 0 rgba(255,46,196,.85);
+    26→          animation:flick 4.6s infinite; line-height:1; }
+    27→  @keyframes flick { 0%,100%{opacity:1} 91%{opacity:1} 92%{opacity:.55} 93%{opacity:1}
+    28→                     96%{opacity:.7} 97%{opacity:1} }
+    29→  .tag { font-weight:500; font-size:12px; letter-spacing:9px; color:#8f7fb8; }
+    30→  .statline { font-weight:700; font-size:14px; letter-spacing:3px; color:#eaf6ff; margin-top:2px; }
+    31→  .statline b { color:#ffd23c; }
+    32→  .pills { display:flex; gap:10px; }
+    33→  .pill { font-weight:700; font-size:12px; letter-spacing:2px; color:#8f7fb8;
+    34→          border:1.5px solid rgba(143,127,184,.4); background:rgba(10,0,20,.6);
+    35→          padding:6px 18px; border-radius:3px; cursor:pointer; }
+    36→  .pill:hover { border-color:rgba(44,246,255,.6); color:#2cf6ff; }
+    37→  .pill.on { color:#0a0014; background:#2cf6ff; border-color:#2cf6ff;
+    38→             box-shadow:0 0 14px rgba(44,246,255,.7); }
+    39→  .sect { font-weight:700; font-size:10px; letter-spacing:5px; color:#6b5f8e; margin-top:2px; }
+    40→  .cards { display:flex; gap:12px; }
+    41→  .card { width:196px; border:1.5px solid rgba(44,246,255,.28); background:rgba(10,0,24,.74);
+    42→          border-radius:5px; padding:10px 13px; }
+    43→  .card.eq { border-color:#2cf6ff; box-shadow:0 0 16px rgba(44,246,255,.3); }
+    44→  .card h4 { font-weight:700; font-size:15px; letter-spacing:3px; color:#eaf6ff; margin:0 0 4px; }
+    45→  .card .st { font-weight:500; font-size:10px; color:#8f7fb8; letter-spacing:1px; line-height:1.75; }
+    46→  .card button, .upg button {
+    47→          margin-top:7px; width:100%; font-family:'Orbitron',Arial; font-weight:700; font-size:11px;
+    48→          letter-spacing:1px; padding:6px 0; border-radius:3px; cursor:pointer;
+    49→          border:1.5px solid #ffd23c; color:#ffd23c; background:transparent; }
+    50→  .card button:hover:not(:disabled), .upg button:hover:not(:disabled) {
+    51→          background:#ffd23c; color:#0a0014; box-shadow:0 0 12px rgba(255,210,60,.55); }
+    52→  .card button:disabled, .upg button:disabled { opacity:.35; cursor:default; }
+    53→  .card button.own { border-color:#9dff3c; color:#9dff3c; }
+    54→  .card button.own:hover { background:transparent; box-shadow:none; }
+    55→  .card button.eqd { background:#2cf6ff; color:#0a0014; border-color:#2cf6ff; }
+    56→  .upgs { display:flex; gap:10px; }
+    57→  .upg { width:196px; border:1.5px solid rgba(157,255,60,.25); background:rgba(10,0,24,.74);
+    58→         border-radius:5px; padding:9px 13px; }
+    59→  .upg.owned { border-color:rgba(157,255,60,.55); }
+    60→  .upg h5 { font-weight:700; font-size:12px; letter-spacing:2px; color:#9dff3c; margin:0 0 3px; }
+    61→  .upg .st { font-weight:500; font-size:10px; color:#8f7fb8; line-height:1.5; min-height:30px; }
+    62→  .upg button.owned { border-color:#9dff3c; color:#9dff3c; }
+    63→  .startrow { display:flex; align-items:center; gap:26px; margin-top:4px; }
+    64→  .toggle { display:flex; align-items:center; gap:8px; font-weight:600; font-size:11px;
+    65→            color:#8f7fb8; cursor:pointer; letter-spacing:2px; }
+    66→  .toggle input { accent-color:#2cf6ff; width:15px; height:15px; cursor:pointer; }
+    67→  #startBtn { font-family:'Orbitron',Arial; font-weight:900; font-size:21px; letter-spacing:7px;
+    68→              padding:13px 58px; color:#0a0014; border:none; border-radius:4px; cursor:pointer;
+    69→              background:linear-gradient(90deg,#2cf6ff,#ff2ec4);
+    70→              box-shadow:0 0 22px rgba(255,46,196,.45), 0 0 22px rgba(44,246,255,.35);
+    71→              animation:breathe 1.7s infinite; }
+    72→  #startBtn:hover { transform:scale(1.05); }
+    73→  @keyframes breathe {
+    74→    0%,100% { box-shadow:0 0 14px rgba(255,46,196,.35), 0 0 14px rgba(44,246,255,.25); }
+    75→    50%     { box-shadow:0 0 30px rgba(255,46,196,.7), 0 0 30px rgba(44,246,255,.55); } }
+    76→  .legend { font-weight:500; font-size:10px; letter-spacing:2px; color:#6b5f8e; }
+    77→  .shopmsg { font-weight:700; font-size:11px; letter-spacing:2px; color:#ff2b4e;
+    78→             min-height:15px; opacity:0; transition:opacity .25s; }
+    79→</style>
+    80→</head>
+    81→<body>
+    82→<div id="boot-error">NEON VOID could not load its renderer.<br>PixiJS loads from a CDN — check your internet connection and reload.</div>
+    83→<div id="ui">
+    84→  <div id="title">
+    85→    <div class="logo">NEON VOID</div>
+    86→    <div class="tag">TOP-DOWN NEON ARENA</div>
+    87→    <div class="statline" id="statline"></div>
+    88→    <div class="pills" id="diffPills"></div>
+    89→    <div class="sect">HANGAR — SHIPS</div>
+    90→    <div class="cards" id="shipCards"></div>
+    91→    <div class="sect">UPGRADES</div>
+    92→    <div class="upgs" id="upgRow"></div>
+    93→    <div class="startrow">
+    94→      <label class="toggle"><input type="checkbox" id="afToggle"> AUTO-FIRE</label>
+    95→      <button id="startBtn">ENGAGE</button>
+    96→    </div>
+    97→    <div class="legend">WASD MOVE &nbsp;·&nbsp; MOUSE AIM &nbsp;·&nbsp; HOLD LMB FIRE &nbsp;·&nbsp; F AUTO-FIRE &nbsp;·&nbsp; P PAUSE &nbsp;·&nbsp; M MUTE &nbsp;·&nbsp; R RETRY</div>
+    98→    <div class="shopmsg" id="shopMsg"></div>
+    99→  </div>
+   100→</div>
+   101→<script src="https://cdn.jsdelivr.net/npm/pixi.js@8/dist/pixi.min.js"></script>
+   102→<script src="https://cdn.jsdelivr.net/npm/pixi-filters@6/dist/pixi-filters.min.js"></script>
+   103→<script>
+   104→/* ============================================================
+   105→   NEON VOID v1.0 — full build (single file)
+   106→   Bands map 1:1 to the future src/ split.
+   107→   All tuning lives in CFG. All shapes generated at runtime.
+   108→   ============================================================ */
+   109→(async () => {
+   110→
+   111→function bootFail () {
+   112→  const el = document.getElementById('boot-error');
+   113→  if (el) el.style.display = 'flex';
+   114→}
+   115→if (typeof PIXI === 'undefined') { bootFail(); return; }
+   116→
+   117→/* ===== 00 CONFIG ===== */
+   118→const TAU = Math.PI * 2;
+   119→const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+   120→const lerp  = (a, b, t) => a + (b - a) * t;
+   121→const rand  = (a = 1, b) => b === undefined ? Math.random() * a : a + Math.random() * (b - a);
+   122→const damp  = (rate, dt) => 1 - Math.exp(-rate * dt);
+   123→function lerpAngle (a, b, t) {
+   124→  let d = (b - a) % TAU;
+   125→  if (d >  Math.PI) d -= TAU;
+   126→  if (d < -Math.PI) d += TAU;
+   127→  return a + d * t;
+   128→}
+   129→
+   130→const CFG = {
+   131→  world: { w: 1280, h: 720, bound: 24, spawnInset: 46 },
+   132→
+   133→  colors: {
+   134→    bg:      0x0a0014,   // arena floor
+   135→    bar:     0x05010a,   // letterbox
+   136→    grid:    0x9d5cff,   // faint purple grid
+   137→    border:  0xa44dff,   // arena border
+   138→    player:  0x2cf6ff,   // cyan
+   139→    core:    0xdfffff,   // near-white cores
+   140→    trail:   0xff2ec4,   // pink engine
+   141→    drone:   0xff2b4e, droneHi: 0xffd9de,      // red
+   142→    hunter:  0xb44bff, hunterHi: 0xefd9ff,     // purple
+   143→    spinner: 0xffe14d, spinnerHi: 0xfff6c9,    // yellow
+   144→    tank:    0x3cff6e, tankHi: 0xd6ffe2,       // green
+   145→    coin:    0xffd23c, heart: 0xff4d6d, gunpk: 0x9dff3c,
+   146→    text:    '#eaf6ff',
+   147→    textDim: '#8f7fb8',
+   148→  },
+   149→
+   150→  bloom: { threshold: 0.22, bloomScale: 0.85, brightness: 1.12, blur: 7 },
+   151→
+   152→  // gun tiers 1..5 — single → twin → spread → lance → nova
+   153→  gunTiers: [
+   154→    { name: 'PULSE',  rate: 8.0, count: 1, spread: 0,     parallel: false, speed: 780,  dmg: 1, pierce: 0, life: 1.05, wave: 0,    tex: 'bullet' },
+   155→    { name: 'TWIN',   rate: 8.6, count: 2, spread: 0.05,  parallel: true,  speed: 800,  dmg: 1, pierce: 0, life: 1.05, wave: 0,    tex: 'bullet' },
+   156→    { name: 'SPREAD', rate: 7.2, count: 3, spread: 0.15,  parallel: false, speed: 760,  dmg: 1, pierce: 0, life: 0.9,  wave: 0,    tex: 'bullet' },
+   157→    { name: 'LANCE',  rate: 6.2, count: 1, spread: 0.006, parallel: false, speed: 1150, dmg: 3, pierce: 2, life: 0.85, wave: 0,    tex: 'lance'  },
+   158→    { name: 'NOVA',   rate: 5.6, count: 5, spread: 0.32,  parallel: false, speed: 820,  dmg: 1, pierce: 0, life: 1.0,  wave: 0.55, tex: 'bullet' },
+   159→  ],
+   160→
+   161→  player: {
+   162→    accel: 2600, maxSpeed: 360, drag: 4.2,
+   163→    turnLerp: 18,
+   164→    radius: 9,            // hitbox — deliberately smaller than the sprite
+   165→    hp: 3, iframes: 1.5,
+   166→    bulletSpread: 0.014,
+   167→    wallBounce: 0.45,
+   168→    trailRate: 70,        // particles / sec at full thrust
+   169→  },
+   170→
+   171→  drone: {
+   172→    radius: 13, hp: 1, hpPerTier: 0,
+   173→    baseSpeed: 62, speedRamp: 0.075, speedCap: 2.5,
+   174→    accel: 300,
+   175→    weaveFreq: 2.1, weaveAmp: 0.55,
+   176→    sepDist: 34, sepForce: 150,
+   177→    spin: 1.3, pulseAmp: 0.09, pulseRate: 3.2,
+   178→    score: 100,
+   179→  },
+   180→  hunter: {
+   181→    radius: 13, hp: 3, hpPerTier: 1,
+   182→    baseSpeed: 120, accel: 360, ring: 270, ringSlack: 70,
+   183→    score: 250, fireMin: 1.7, fireMax: 2.4, charge: 0.38,
+   184→    bulletSpeed: 250, predict: 0.7,
+   185→  },
+   186→  spinner: {
+   187→    radius: 16, hp: 6, hpPerTier: 2,
+   188→    baseSpeed: 46, accel: 130, spin: 2.6,
+   189→    score: 400, sprayEvery: 0.085, sprayDur: 1.25, coolDur: 1.5,
+   190→    sprayRot: 0.44, bulletSpeed: 168,
+   191→  },
+   192→  tank: {
+   193→    radius: 23, hp: 22, hpPerTier: 6,
+   194→    baseSpeed: 34, accel: 95,
+   195→    score: 600, fireCd: 3.3, ringCount: 8, ringSpeed: 150,
+   196→    knock: 1.9,
+   197→  },
+   198→
+   199→  waves: {
+   200→    budget:        w => 3 + w * 1.9 + Math.pow(w, 1.18),
+   201→    spawnInterval: w => Math.max(0.38, 1.25 - w * 0.07),
+   202→    breather: 2.4, telegraph: 0.7, minPlayerDist: 190,
+   203→    unlock: { hunter: 3, spinner: 5, tank: 7 },
+   204→    cost:   { drone: 1, hunter: 3, spinner: 4, tank: 7 },
+   205→    weights:{ drone: 1.0, hunter: 0.6, spinner: 0.4, tank: 0.25 },
+   206→    tierEvery: 5, speedCap: 1.9, maxActive: 26,
+   207→    clearBonus: w => w * 50,
+   208→  },
+   209→
+   210→  drops: {
+   211→    drone:   { coin: 0.14, gun: 0.02, heart: 0.03 },
+   212→    hunter:  { coin: 0.50, gun: 0.07, heart: 0.08 },
+   213→    spinner: { coin: 0.85, gun: 0.12, heart: 0.12 },
+   214→    tank:    { coins: () => 2 + (Math.random() < 0.5 ? 1 : 0), gun: 0.5, heart: 0.5 },
+   215→  },
+   216→
+   217→  pickup: { magnetR: 110, collect: 26, life: 9, pull: 900, pullCap: 520, maxField: 12, coinValue: 5 },
+   218→
+   219→  combo: { window: 2.6, step: 0.1, cap: 5 },
+   220→
+   221→  diff: {
+   222→    easy:   { label: 'EASY',   hpBonus: 1, speed: 0.85, bullet: 0.80, budget: 0.80, iframes: 1.8, mult: 0.8  },
+   223→    normal: { label: 'NORMAL', hpBonus: 0, speed: 1.00, bullet: 1.00, budget: 1.00, iframes: 1.5, mult: 1.0  },
+   224→    hard:   { label: 'HARD',   hpBonus: 0, speed: 1.14, bullet: 1.12, budget: 1.30, iframes: 1.1, mult: 1.35 },
+   225→  },
+   226→
+   227→  ships: {
+   228→    vector: {
+   229→      name: 'VECTOR', cost: 0, flavor: 'BALANCED INTERCEPTOR',
+   230→      accel: 2600, maxSpeed: 360, drag: 4.2, hp: 3, radius: 9, scale: 1.0,
+   231→      color: 0x2cf6ff, trail: 0xff2ec4, pts: [19, 0, -13, -12, -6, 0, -13, 12],
+   232→      stats: 'SPD 360 · HP 3 · HIT 9',
+   233→    },
+   234→    wasp: {
+   235→      name: 'WASP', cost: 300, flavor: 'FAST · FRAGILE FEEL',
+   236→      accel: 3300, maxSpeed: 445, drag: 4.6, hp: 3, radius: 8, scale: 0.9,
+   237→      color: 0x9dff3c, trail: 0x2cf6ff, pts: [21, 0, -15, -9, -5, 0, -15, 9],
+   238→      stats: 'SPD 445 · HP 3 · HIT 8',
+   239→    },
+   240→    juggernaut: {
+   241→      name: 'JUGGERNAUT', cost: 600, flavor: 'HEAVY · EXTRA PLATING',
+   242→      accel: 2200, maxSpeed: 300, drag: 4.0, hp: 4, radius: 11, scale: 1.15,
+   243→      color: 0xffa23c, trail: 0xffe14d, pts: [19, 0, -15, -14, -8, 0, -15, 14],
+   244→      stats: 'SPD 300 · HP 4 · HIT 11',
+   245→    },
+   246→  },
+   247→
+   248→  upgrades: {
+   249→    twin:       { name: 'TWIN CANNON', cost: 250, desc: 'Deploy at gun tier 2 — TWIN' },
+   250→    overcharge: { name: 'OVERCHARGE',   cost: 400, desc: '+18% fire rate, all guns' },
+   251→    magnet:     { name: 'MAGNETIZER',   cost: 300, desc: '+70% pickup magnet radius' },
+   252→  },
+   253→
+   254→  feel: {
+   255→    shakeMax: 16, traumaDecay: 1.7,
+   256→    traumaKill: 0.34, traumaHurt: 0.85, traumaWall: 0.10,
+   257→    hitstopKill: 0.05, hitstopHurt: 0.10,
+   258→    gridPulseKill: 0.55, gridPulseDecay: 2.4,
+   259→    hurtFlash: 0.24,
+   260→    dyingSlowmo: 0.22, dyingTime: 0.85,
+   261→    rgbHurt: 0.22, rgbMag: 9,
+   262→  },
+   263→
+   264→  pools: { bullets: 120, ebullets: 170, particles: 460, rings: 26, ghosts: 18,
+   265→           popups: 20, teles: 14, enemies: 44, pickups: 26 },
+   266→
+   267→  audio: {
+   268→    master: 0.5,
+   269→    shoot: { type: 'square',   f0: 840, fMul: 0.72, dur: 0.07, vol: 0.075 },
+   270→    kill:  { noise: { dur: 0.26, vol: 0.34, lp0: 3200, lp1: 160 },
+   271→             tone: { type: 'triangle', f0: 210, f1: 42, dur: 0.30, vol: 0.22 } },
+   272→    hurt:  { tone: { type: 'sawtooth', f0: 150, f1: 46, dur: 0.22, vol: 0.38 },
+   273→             noise: { dur: 0.12, vol: 0.18, lp0: 700, lp1: 180 } },
+   274→    coin:  { tones: [ { type: 'sine', f0: 1046, f1: 1046, dur: 0.07, vol: 0.14, at: 0 },
+   275→                      { type: 'sine', f0: 1568, f1: 1568, dur: 0.10, vol: 0.14, at: 0.07 } ] },
+   276→    gun:   { tone: { type: 'square', f0: 260, f1: 920, dur: 0.22, vol: 0.2 },
+   277→             noise: { dur: 0.1, vol: 0.1, lp0: 2400, lp1: 900 } },
+   278→    heal:  { tones: [ { type: 'sine', f0: 660, f1: 660, dur: 0.09, vol: 0.15, at: 0 },
+   279→                      { type: 'sine', f0: 990, f1: 990, dur: 0.12, vol: 0.15, at: 0.08 } ] },
+   280→    ui:    { tone: { type: 'square', f0: 1700, f1: 1150, dur: 0.05, vol: 0.05 } },
+   281→    boom:  { noise: { dur: 0.5, vol: 0.5, lp0: 1400, lp1: 90 },
+   282→             tone: { type: 'sine', f0: 95, f1: 28, dur: 0.45, vol: 0.4 } },
+   283→    tier:  { tones: [ { type: 'square', f0: 220, f1: 220, dur: 0.12, vol: 0.16, at: 0 },
+   284→                      { type: 'square', f0: 330, f1: 330, dur: 0.14, vol: 0.16, at: 0.14 } ] },
+   285→  },
+   286→};
+   287→const W = CFG.world.w, H = CFG.world.h;
+   288→const COL = CFG.colors;
+   289→
+   290→/* ===== 10b META — persistent profile (localStorage) ===== */
+   291→const META_DEFAULTS = {
+   292→  coins: 0, best: 0,
+   293→  ship: 'vector', owned: ['vector'],
+   294→  upg: {},                 // { twin:true, overcharge:true, magnet:true }
+   295→  diff: 'normal', autoFire: false, muted: false,
+   296→};
+   297→function loadMeta () {
+   298→  const m = Object.assign({}, META_DEFAULTS, { owned: ['vector'], upg: {} });
+   299→  try {
+   300→    const raw = localStorage.getItem('neonvoid_save');
+   301→    if (raw) {
+   302→      const j = JSON.parse(raw);
+   303→      Object.assign(m, j);
+   304→      if (!Array.isArray(m.owned) || !m.owned.includes('vector')) {
+   305→        m.owned = (m.owned && m.owned.includes('vector')) ? m.owned : ['vector'].concat(Array.isArray(m.owned) ? m.owned : []);
+   306→      }
+   307→      if (!m.upg || typeof m.upg !== 'object') m.upg = {};
+   308→      if (!CFG.diff[m.diff]) m.diff = 'normal';
+   309→      if (!CFG.ships[m.ship]) m.ship = 'vector';
+   310→    } else {
+   311→      // migrate the v0.1 best score if present
+   312→      const old = parseInt(localStorage.getItem('neonvoid_best') || '0', 10) || 0;
+   313→      if (old > 0) m.best = old;
+   314→    }
+   315→  } catch (e) { /* corrupted save — play with defaults */ }
+   316→  return m;
+   317→}
+   318→const META = loadMeta();
+   319→function saveMeta () {
+   320→  try { localStorage.setItem('neonvoid_save', JSON.stringify(META)); } catch (e) {}
+   321→}
+   322→const DIFF = () => CFG.diff[META.diff];
+   323→
+   324→/* ===== 01 CORE — boot, renderer, layers ===== */
+   325→const app = new PIXI.Application();
+   326→await app.init({
+   327→  width: window.innerWidth, height: window.innerHeight,
+   328→  background: COL.bar, antialias: true,
+   329→  resolution: Math.min(window.devicePixelRatio || 1, 2),
+   330→  autoDensity: true, powerPreference: 'high-performance',
+   331→});
+   332→document.body.appendChild(app.canvas);
+   333→
+   334→// Best-effort font load (don't block forever if offline)
+   335→try {
+   336→  await Promise.race([
+   337→    Promise.all([
+   338→      document.fonts.load('900 72px Orbitron'),
+   339→      document.fonts.load('700 20px Orbitron'),
+   340→      document.fonts.load('500 16px Orbitron'),
+   341→    ]),
+   342→    new Promise(r => setTimeout(r, 1800)),
+   343→  ]);
+   344→} catch (e) { /* fallback font is fine */ }
+   345→
+   346→// Filters — bloom is the whole aesthetic; RGB split is the hurt kick.
+   347→const FXNS = (PIXI.filters && PIXI.filters.AdvancedBloomFilter) ? PIXI.filters : PIXI;
+   348→const AdvancedBloomFilter = FXNS.AdvancedBloomFilter;
+   349→const RGBSplitFilter = FXNS.RGBSplitFilter;
+   350→
+   351→// Layer tree:
+   352→// stage
+   353→// ├ worldRoot (letterbox transform + shake)
+   354→// │   └ glow [bloom (+rgbSplit on hit)] └ crisp (HUD, no bloom)
+   355→// ├ overlayRoot (letterbox transform, no shake)
+   356→// └ flashRect (fullscreen damage flash)
+   357→const worldRoot = new PIXI.Container();
+   358→const overlayRoot = new PIXI.Container();
+   359→const glow = new PIXI.Container();
+   360→const crisp = new PIXI.Container();
+   361→const glowFilters = [];
+   362→if (AdvancedBloomFilter) glowFilters.push(new AdvancedBloomFilter(CFG.bloom));
+   363→let rgbF = null;
+   364→if (RGBSplitFilter) {
+   365→  // v6 wants an options object; positional args are deprecated
+   366→  rgbF = new RGBSplitFilter({ red: [0, 0], green: [0, 0], blue: [0, 0] });
+   367→  glowFilters.push(rgbF);
+   368→}
+   369→if (glowFilters.length) glow.filters = glowFilters;
+   370→else console.warn('[NeonVoid] pixi-filters not found — running on layered-stroke glow only.');
+   371→worldRoot.addChild(glow, crisp);
+   372→app.stage.addChild(worldRoot, overlayRoot);
+   373→
+   374→// Arena floor (slightly lighter than the letterbox bars so the play space reads instantly)
+   375→const floor = new PIXI.Graphics()
+   376→  .rect(0, 0, W, H)
+   377→  .fill({ color: COL.bg, alpha: 1 });
+   378→glow.addChild(floor);
+   379→
+   380→const fxL      = new PIXI.Container();  // particles, rings, ghosts, telegraphs
+   381→const enemyL   = new PIXI.Container();
+   382→const pickupL  = new PIXI.Container();
+   383→const bulletL  = new PIXI.Container();
+   384→const popupL   = new PIXI.Container();
+   385→glow.addChild(fxL, enemyL, pickupL, bulletL, popupL);
+   386→
+   387→const flashRect = new PIXI.Graphics()
+   388→  .rect(0, 0, window.innerWidth, window.innerHeight)
+   389→  .fill({ color: 0xffffff, alpha: 1 });
+   390→flashRect.alpha = 0;
+   391→app.stage.addChild(flashRect);
+   392→
+   393→// Global "feel" state
+   394→const S = {
+   395→  mode: 'boot',           // boot | title | playing | dying | over | paused
+   396→  time: 0,
+   397→  score: 0, best: META.best, bestBeaten: false, kills: 0,
+   398→  wave: 0, tier: 1, runCoins: 0,
+   399→  combo: 0, comboT: 0,
+   400→  gun: 1,
+   401→  timescale: 1, hitstop: 0,
+   402→  trauma: 0, shakeX: 0, shakeY: 0,
+   403→  gridPulse: 0, flashA: 0, rgbT: 0,
+   404→  dyingT: 0,
+   405→};
+   406→
+   407→function resize () {
+   408→  const vw = window.innerWidth, vh = window.innerHeight;
+   409→  app.renderer.resize(vw, vh);
+   410→  const s = Math.min(vw / W, vh / H);
+   411→  scaleS = s; offX = (vw - W * s) / 2; offY = (vh - H * s) / 2;
+   412→  viewW = vw; viewH = vh;
+   413→  worldRoot.position.set(offX, offY);   worldRoot.scale.set(s);
+   414→  overlayRoot.position.set(offX, offY); overlayRoot.scale.set(s);
+   415→  flashRect.clear().rect(0, 0, vw, vh).fill({ color: 0xffffff, alpha: 1 });
+   416→  flashRect.alpha = S.flashA;
+   417→  const ui = document.getElementById('ui');
+   418→  if (ui) {
+   419→    ui.style.left = offX + 'px';
+   420→    ui.style.top = offY + 'px';
+   421→    ui.style.width = W + 'px';
+   422→    ui.style.height = H + 'px';
+   423→    ui.style.transform = 'scale(' + s + ')';
+   424→  }
+   425→}
+   426→let scaleS = 1, offX = 0, offY = 0, viewW = 0, viewH = 0;
+   427→window.addEventListener('resize', resize);
+   428→
+   429→/* ===== 02 FX — grid, border, shake, hit-stop, RGB hurt, reticle ===== */
+   430→
+   431→// Background grid — drawn ONCE, pulsing via container alpha (zero per-frame cost)
+   432→const gridG = new PIXI.Graphics();
+   433→for (let x = 64; x < W; x += 64) {
+   434→  const major = (x / 64) % 4 === 0;
+   435→  gridG.moveTo(x, 0).lineTo(x, H).stroke({ width: 1, color: COL.grid, alpha: major ? 0.15 : 0.08 });
+   436→}
+   437→for (let y = 64; y < H; y += 64) {
+   438→  const major = (y / 64) % 4 === 0;
+   439→  gridG.moveTo(0, y).lineTo(W, y).stroke({ width: 1, color: COL.grid, alpha: major ? 0.15 : 0.08 });
+   440→}
+   441→const gridC = new PIXI.Container();
+   442→gridC.addChild(gridG);
+   443→glow.addChildAt(gridC, 1); // above floor, below everything else
+   444→
+   445→// Arena border — glowing purple rectangle + Tron corner brackets
+   446→const borderG = new PIXI.Graphics();
+   447→borderG.rect(4, 4, W - 8, H - 8).stroke({ width: 6, color: COL.border, alpha: 0.14 });
+   448→borderG.rect(4, 4, W - 8, H - 8).stroke({ width: 2, color: COL.border, alpha: 0.75 });
+   449→const CL = 34; // corner bracket length
+   450→[[6, 6, 1, 1], [W - 6, 6, -1, 1], [6, H - 6, 1, -1], [W - 6, H - 6, -1, -1]].forEach(([cx, cy, dx, dy]) => {
+   451→  borderG.moveTo(cx, cy + dy * CL).lineTo(cx, cy).lineTo(cx + dx * CL, cy)
+   452→    .stroke({ width: 3.5, color: 0xd8b4ff, alpha: 0.9 });
+   453→});
+   454→const borderC = new PIXI.Container();
+   455→borderC.addChild(borderG);
+   456→glow.addChild(borderC);
+   457→
+   458→function fxUpdate (dt, rawDt) {
+   459→  // grid breathes + flashes brighter on kills
+   460→  gridC.alpha = clamp(0.72 + 0.28 * Math.sin(S.time * 0.8) + S.gridPulse, 0, 1.6);
+   461→  S.gridPulse = Math.max(0, S.gridPulse - CFG.feel.gridPulseDecay * rawDt);
+   462→  borderC.alpha = 0.78 + 0.22 * Math.sin(S.time * 2.1);
+   463→
+   464→  // trauma → shake (decays in real time so shake survives hit-stop)
+   465→  S.trauma = Math.max(0, S.trauma - CFG.feel.traumaDecay * rawDt);
+   466→  const mag = S.trauma * S.trauma * CFG.feel.shakeMax;
+   467→  S.shakeX = (Math.random() * 2 - 1) * mag;
+   468→  S.shakeY = (Math.random() * 2 - 1) * mag * 0.85;
+   469→  worldRoot.position.set(offX + S.shakeX, offY + S.shakeY);
+   470→  worldRoot.rotation = ((Math.random() * 2 - 1) * mag) * 0.0012;
+   471→
+   472→  // fullscreen damage flash
+   473→  S.flashA = Math.max(0, S.flashA - 3.5 * rawDt);
+   474→  flashRect.alpha = S.flashA;
+   475→
+   476→  // RGB split — hurt chromatic aberration, decays fast
+   477→  if (rgbF) {
+   478→    S.rgbT = Math.max(0, S.rgbT - rawDt);
+   479→    const k = (S.rgbT / CFG.feel.rgbHurt) * CFG.feel.rgbMag;
+   480→    rgbF.red = [k, 0];
+   481→    rgbF.green = [0, k * 0.6];
+   482→    rgbF.blue = [-k * 0.5, 0];
+   483→  }
+   484→}
+   485→function addTrauma (v) { S.trauma = clamp(S.trauma + v, 0, 1); }
+   486→function hitstop (t)   { S.hitstop = Math.max(S.hitstop, t); }
+   487→
+   488→// Mouse reticle — drawn vector crosshair, additive, gentle pulse
+   489→const reticle = new PIXI.Graphics();
+   490→reticle.circle(0, 0, 10).stroke({ width: 1.5, color: COL.player, alpha: 0.85 });
+   491→reticle.circle(0, 0, 1.8).fill({ color: COL.core, alpha: 1 });
+   492→for (let i = 0; i < 4; i++) {
+   493→  const a = i * Math.PI / 2;
+   494→  reticle.moveTo(Math.cos(a) * 13, Math.sin(a) * 13)
+   495→    .lineTo(Math.cos(a) * 19, Math.sin(a) * 19)
+   496→    .stroke({ width: 1.5, color: COL.player, alpha: 0.7 });
+   497→}
+   498→reticle.blendMode = 'add';
+   499→glow.addChild(reticle);
+   500→
+   501→/* ===== 03 POOLS — baked textures + particles/rings/ghosts/popups ===== */
+   502→
+   503→// "Zero asset files" ≠ zero GPU textures: we draw vectors once and bake them.
+   504→function bake (draw, res = 2) {
+   505→  const g = new PIXI.Graphics();
+   506→  draw(g);
+   507→  const tx = app.renderer.generateTexture({ target: g, resolution: res, antialias: true });
+   508→  g.destroy();
+   509→  return tx;
+   510→}
+   511→function neonPoly (g, pts, fillColor, glowColor, coreColor, hw, mw, cw, fa) {
+   512→  g.poly(pts).fill({ color: fillColor, alpha: 1 });
+   513→  g.poly(pts).stroke({ width: hw, color: glowColor, alpha: 0.20, join: 'round' });
+   514→  g.poly(pts).stroke({ width: mw, color: glowColor, alpha: 0.85, join: 'round' });
+   515→  g.poly(pts).stroke({ width: cw, color: coreColor, alpha: fa, join: 'round' });
+   516→}
+   517→const SPINNER_PTS = [];
+   518→for (let i = 0; i < 16; i++) {
+   519→  const r = i % 2 ? 7.5 : 17;
+   520→  const a = i / 16 * TAU;
+   521→  SPINNER_PTS.push(Math.cos(a) * r, Math.sin(a) * r);
+   522→}
+   523→const TANK_PTS = [];
+   524→for (let i = 0; i < 8; i++) {
+   525→  const a = i / 8 * TAU + TAU / 16;
+   526→  TANK_PTS.push(Math.cos(a) * 25, Math.sin(a) * 25);
+   527→}
+   528→const HUNTER_PTS = [17, 0, 2, 7, -12, 13, -6, 0, -12, -13, 2, -7]; // dart, faces +x
+   529→
+   530→const TEX = {};
+   531→function bakeShipTex (ship) {
+   532→  const c = ship.color;
+   533→  TEX['ship_' + ship.name] = bake(g => neonPoly(g, ship.pts, 0x07222c, c, COL.core, 9, 3.5, 1.6, 0.95));
+   534→  TEX['shipW_' + ship.name] = bake(g => neonPoly(g, ship.pts, 0xffffff, 0xffffff, 0xffffff, 7, 3, 1.5, 1));
+   535→}
+   536→function bakeTextures () {
+   537→  for (const key in CFG.ships) bakeShipTex(CFG.ships[key]);
+   538→  TEX.ship = TEX.ship_VECTOR; TEX.shipW = TEX.shipW_VECTOR;
+   539→
+   540→  TEX.drone = bake(g => neonPoly(g, [15, 0, 0, 11, -15, 0, 0, -11], 0x2a040c, COL.drone, COL.droneHi, 8, 3, 1.4, 0.9));
+   541→  TEX.droneW = bake(g => neonPoly(g, [15, 0, 0, 11, -15, 0, 0, -11], 0xffffff, 0xffffff, 0xffffff, 6, 3, 1.4, 1));
+   542→
+   543→  TEX.hunter = bake(g => neonPoly(g, HUNTER_PTS, 0x1c0430, COL.hunter, COL.hunterHi, 8, 3, 1.4, 0.9));
+   544→  TEX.hunterW = bake(g => neonPoly(g, HUNTER_PTS, 0xffffff, 0xffffff, 0xffffff, 6, 3, 1.4, 1));
+   545→
+   546→  TEX.spinner = bake(g => neonPoly(g, SPINNER_PTS, 0x2c2404, COL.spinner, COL.spinnerHi, 8, 3, 1.3, 0.9));
+   547→  TEX.spinnerW = bake(g => neonPoly(g, SPINNER_PTS, 0xffffff, 0xffffff, 0xffffff, 6, 3, 1.3, 1));
+   548→
+   549→  TEX.tank = bake(g => {
+   550→    neonPoly(g, TANK_PTS, 0x04240e, COL.tank, COL.tankHi, 9, 3.5, 1.5, 0.9);
+   551→    const inner = TANK_PTS.map(v => v * 0.55);
+   552→    g.poly(inner).stroke({ width: 2, color: COL.tank, alpha: 0.8, join: 'round' });
+   553→    g.circle(0, 0, 5).fill({ color: COL.tankHi, alpha: 0.95 });
+   554→  });
+   555→  TEX.tankW = bake(g => neonPoly(g, TANK_PTS, 0xffffff, 0xffffff, 0xffffff, 7, 3, 1.5, 1));
+   556→
+   557→  TEX.bullet = bake(g => {
+   558→    g.roundRect(-7, -1.8, 14, 3.6, 1.8).fill({ color: 0x063040, alpha: 1 });
+   559→    g.roundRect(-7, -1.8, 14, 3.6, 1.8).stroke({ width: 3.5, color: COL.player, alpha: 0.28 });
+   560→    g.roundRect(-7, -1.8, 14, 3.6, 1.8).stroke({ width: 1.6, color: COL.player, alpha: 0.9 });
+   561→    g.roundRect(-5, -0.9, 10, 1.8, 0.9).fill({ color: COL.core, alpha: 1 });
+   562→  });
+   563→  TEX.lance = bake(g => {
+   564→    g.roundRect(-14, -1.6, 28, 3.2, 1.6).fill({ color: 0x063040, alpha: 1 });
+   565→    g.roundRect(-14, -1.6, 28, 3.2, 1.6).stroke({ width: 3.5, color: COL.player, alpha: 0.3 });
+   566→    g.roundRect(-14, -1.6, 28, 3.2, 1.6).stroke({ width: 1.6, color: COL.player, alpha: 0.95 });
+   567→    g.roundRect(-10, -0.8, 20, 1.6, 0.8).fill({ color: COL.core, alpha: 1 });
+   568→  });
+   569→  TEX.ebullet = bake(g => {   // white — tinted per enemy at spawn
+   570→    g.circle(0, 0, 8).fill({ color: 0xffffff, alpha: 0.22 });
+   571→    g.circle(0, 0, 5).stroke({ width: 2, color: 0xffffff, alpha: 0.9 });
+   572→    g.circle(0, 0, 2.6).fill({ color: 0xffffff, alpha: 1 });
+   573→  });
+   574→  TEX.dot = bake(g => {   // soft round particle (tint per use)
+   575→    g.circle(0, 0, 8).fill({ color: 0xffffff, alpha: 0.22 });
+   576→    g.circle(0, 0, 5.5).fill({ color: 0xffffff, alpha: 0.5 });
+   577→    g.circle(0, 0, 3).fill({ color: 0xffffff, alpha: 1 });
+   578→  });
+   579→  TEX.spark = bake(g => { // diamond shard
+   580→    g.poly([0, -7, 2.6, 0, 0, 7, -2.6, 0]).fill({ color: 0xffffff, alpha: 1 });
+   581→  });
+   582→  TEX.ring = bake(g => {  // shockwave ring (tint per use)
+   583→    g.circle(0, 0, 24).stroke({ width: 5, color: 0xffffff, alpha: 0.35 });
+   584→    g.circle(0, 0, 24).stroke({ width: 2, color: 0xffffff, alpha: 1 });
+   585→  });
+   586→  TEX.coin = bake(g => {
+   587→    const hp2 = [];
+   588→    for (let i = 0; i < 6; i++) {
+   589→      const a = i / 6 * TAU;
+   590→      hp2.push(Math.cos(a) * 9, Math.sin(a) * 9);
+   591→    }
+   592→    g.poly(hp2).fill({ color: 0x3a2a00, alpha: 1 });
+   593→    g.poly(hp2).stroke({ width: 5, color: COL.coin, alpha: 0.2, join: 'round' });
+   594→    g.poly(hp2).stroke({ width: 2, color: COL.coin, alpha: 0.95, join: 'round' });
+   595→    g.poly(hp2.map(v => v * 0.5)).stroke({ width: 1.5, color: 0xfff2c0, alpha: 0.9, join: 'round' });
+   596→  });
+   597→  TEX.heart = bake(g => {
+   598→    g.circle(-4.5, -4, 6.2).fill({ color: COL.heart, alpha: 0.95 });
+   599→    g.circle(4.5, -4, 6.2).fill({ color: COL.heart, alpha: 0.95 });
+   600→    g.poly([-10.2, -1.5, 10.2, -1.5, 0, 11.5]).fill({ color: COL.heart, alpha: 0.95 });
+   601→    g.circle(-3.2, -5.2, 2).fill({ color: 0xffe3ea, alpha: 0.95 });
+   602→  });
+   603→  TEX.gunpk = bake(g => {
+   604→    const pts = [0, -11, 9, -1, 4, -1, 4, 10, -4, 10, -4, -1, -9, -1];
+   605→    g.poly(pts).fill({ color: 0x123000, alpha: 1 });
+   606→    g.poly(pts).stroke({ width: 5, color: COL.gunpk, alpha: 0.2, join: 'round' });
+   607→    g.poly(pts).stroke({ width: 2, color: COL.gunpk, alpha: 0.95, join: 'round' });
+   608→  });
+   609→}
+   610→bakeTextures(); // must run before pool factories below reference TEX.*
+   611→
+   612→// Generic fixed-size pool. Objects get .active/.visible toggles.
+   613→function makePool (n, factory, layer) {
+   614→  const items = [];
+   615→  for (let i = 0; i < n; i++) {
+   616→    const o = factory();
+   617→    o.active = false; o.visible = false;
+   618→    layer.addChild(o);
+   619→    items.push(o);
+   620→  }
+   621→  return {
+   622→    items,
+   623→    get () {
+   624→      for (const o of items) if (!o.active) { o.active = true; o.visible = true; return o; }
+   625→      return null;
+   626→    },
+   627→    release (o) { o.active = false; o.visible = false; },
+   628→    releaseAll () { for (const o of items) { o.active = false; o.visible = false; } },
+   629→    countActive () { let c = 0; for (const o of items) if (o.active) c++; return c; },
+   630→  };
+   631→}
+   632→function spriteOf (tex) { const s = new PIXI.Sprite(tex); s.anchor.set(0.5); s.blendMode = 'add'; return s; }
+   633→
+   634→// --- particles: sparks (diamonds) + embers (soft dots) + trails ---
+   635→const partPool = makePool(CFG.pools.particles, () => spriteOf(TEX.dot), fxL);
+   636→function emit (o) {
+   637→  const p = partPool.get();
+   638→  if (!p) return;
+   639→  p.texture = o.tex || TEX.dot;
+   640→  p.tint = o.tint ?? 0xffffff;
+   641→  p.x = o.x; p.y = o.y;
+   642→  p.vx = o.vx || 0; p.vy = o.vy || 0;
+   643→  p.life = p.maxLife = o.life || 0.5;
+   644→  p.size0 = o.size || 1; p.grow = o.grow || 0;
+   645→  p.drag = o.drag ?? 2.5;
+   646→  p.alpha0 = o.alpha ?? 1;
+   647→  p.alpha = p.alpha0;
+   648→  p.rotation = o.rot || 0;
+   649→  p.scale.set(o.size || 1);
+   650→}
+   651→function burstKill (x, y, tint, hi) {
+   652→  // sparks — hot mix of enemy color / white / amber
+   653→  for (let i = 0; i < 14; i++) {
+   654→    const a = rand(TAU), sp = rand(110, 430);
+   655→    emit({
+   656→      tex: TEX.spark, tint: Math.random() < 0.45 ? hi : (Math.random() < 0.5 ? tint : 0xffb46e),
+   657→      x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+   658→      life: rand(0.28, 0.62), size: rand(0.5, 1.05), drag: 3.2, rot: rand(TAU),
+   659→    });
+   660→  }
+   661→  // slow embers
+   662→  for (let i = 0; i < 4; i++) {
+   663→    const a = rand(TAU), sp = rand(20, 90);
+   664→    emit({
+   665→      tex: TEX.dot, tint, x, y,
+   666→      vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+   667→      life: rand(0.45, 0.8), size: rand(0.9, 1.5), grow: 1.4, drag: 1.6, alpha: 0.55,
+   668→    });
+   669→  }
+   670→}
+   671→function puff (x, y, n, tint, spread = 90) {
+   672→  for (let i = 0; i < n; i++) {
+   673→    const a = rand(TAU), sp = rand(30, spread);
+   674→    emit({ tex: TEX.dot, tint, x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.2, 0.4), size: rand(0.5, 0.9), drag: 4 });
+   675→  }
+   676→}
+   677→function updateParticles (dt) {
+   678→  for (const p of partPool.items) {
+   679→    if (!p.active) continue;
+   680→    p.life -= dt;
+   681→    if (p.life <= 0) { partPool.release(p); continue; }
+   682→    const k = Math.exp(-p.drag * dt);
+   683→    p.vx *= k; p.vy *= k;
+   684→    p.x += p.vx * dt; p.y += p.vy * dt;
+   685→    const t = p.life / p.maxLife;
+   686→    p.alpha = p.alpha0 * Math.min(1, t * 1.6);
+   687→    const sc = p.size0 * (p.grow ? 1 + (1 - t) * p.grow : (0.4 + 0.6 * t));
+   688→    p.scale.set(sc);
+   689→  }
+   690→}
+   691→
+   692→// --- shockwave rings ---
+   693→const ringPool = makePool(CFG.pools.rings, () => spriteOf(TEX.ring), fxL);
+   694→function ring (x, y, tint, maxScale = 2.1, dur = 0.28) {
+   695→  const r = ringPool.get();
+   696→  if (!r) return;
+   697→  r.texture = TEX.ring; r.tint = tint;
+   698→  r.x = x; r.y = y; r.t = 0; r.dur = dur; r.maxScale = maxScale;
+   699→  r.scale.set(0.3); r.alpha = 0.9;
+   700→}
+   701→function updateRings (dt) {
+   702→  for (const r of ringPool.items) {
+   703→    if (!r.active) continue;
+   704→    r.t += dt;
+   705→    const k = r.t / r.dur;
+   706→    if (k >= 1) { ringPool.release(r); continue; }
+   707→    r.scale.set(lerp(0.3, r.maxScale, 1 - Math.pow(1 - k, 2)));
+   708→    r.alpha = 0.9 * (1 - k);
+   709→  }
+   710→}
+   711→
+   712→// --- white ghost flashes (enemy silhouette pop) ---
+   713→const ghostPool = makePool(CFG.pools.ghosts, () => spriteOf(TEX.droneW), fxL);
+   714→function ghost (x, y, tex, scale = 1) {
+   715→  const g = ghostPool.get();
+   716→  if (!g) return;
+   717→  g.texture = tex; g.x = x; g.y = y;
+   718→  g.t = 0; g.dur = 0.16; g.scale0 = scale;
+   719→  g.scale.set(scale); g.alpha = 1; g.rotation = 0;
+   720→}
+   721→function updateGhosts (dt) {
+   722→  for (const g of ghostPool.items) {
+   723→    if (!g.active) continue;
+   724→    g.t += dt;
+   725→    const k = g.t / g.dur;
+   726→    if (k >= 1) { ghostPool.release(g); continue; }
+   727→    g.scale.set(g.scale0 * (1 + k * 0.7));
+   728→    g.alpha = 1 - k;
+   729→  }
+   730→}
+   731→
+   732→// --- floating score popups ---
+   733→const popupPool = makePool(CFG.pools.popups, () => {
+   734→  const t = new PIXI.Text({
+   735→    text: '', style: {
+   736→      fontFamily: 'Orbitron, Arial', fontSize: 17, fontWeight: '700',
+   737→      fill: COL.text, letterSpacing: 1,
+   738→    },
+   739→  });
+   740→  t.anchor.set(0.5);
+   741→  return t;
+   742→}, popupL);
+   743→function popup (x, y, str, color = COL.text, size = 17) {
+   744→  const p = popupPool.get();
+   745→  if (!p) return;
+   746→  p.text = str;
+   747→  p.style.fill = color; p.style.fontSize = size;
+   748→  p.x = x + rand(-6, 6); p.y = y - 10;
+   749→  p.t = 0; p.dur = 0.75; p.vx = rand(-14, 14);
+   750→  p.scale.set(1.35); p.alpha = 1;
+   751→}
+   752→function updatePopups (dt) {
+   753→  for (const p of popupPool.items) {
+   754→    if (!p.active) continue;
+   755→    p.t += dt;
+   756→    const k = p.t / p.dur;
+   757→    if (k >= 1) { popupPool.release(p); continue; }
+   758→    p.y -= 52 * dt * (1 - k * 0.5);
+   759→    p.x += p.vx * dt;
+   760→    p.scale.set(lerp(1, 1.35, Math.max(0, 1 - k * 4)));
+   761→    p.alpha = k < 0.6 ? 1 : 1 - (k - 0.6) / 0.4;
+   762→  }
+   763→}
+   764→
+   765→/* ===== 04 PLAYER — stats come from the equipped ship ===== */
+   766→const PC = CFG.player;
+   767→const player = {
+   768→  x: W / 2, y: H / 2, vx: 0, vy: 0,
+   769→  angle: -Math.PI / 2,       // facing (lerped toward mouse)
+   770→  hp: 3, hpMax: 3, iframes: 0, fireCd: 0,
+   771→  gun: 1,
+   772→  alive: true, thrust: 0, trailAcc: 0,
+   773→  squashX: 0, squashY: 0,    // wall-bounce squash timers
+   774→  flashT: 0,
+   775→  ship: CFG.ships.vector,
+   776→};
+   777→const playerSpr = new PIXI.Sprite(TEX.ship);
+   778→playerSpr.anchor.set(0.5);
+   779→glow.addChild(playerSpr);
+   780→
+   781→function shipTexName (ship) { return 'ship_' + ship.name; }
+   782→
+   783→function playerReset () {
+   784→  const ship = CFG.ships[META.ship] || CFG.ships.vector;
+   785→  const D = DIFF();
+   786→  player.ship = ship;
+   787→  player.x = W / 2; player.y = H / 2;
+   788→  player.vx = player.vy = 0;
+   789→  player.angle = -Math.PI / 2;
+   790→  player.hpMax = ship.hp + D.hpBonus;
+   791→  player.hp = player.hpMax;
+   792→  player.iframes = 0; player.fireCd = 0;
+   793→  player.gun = META.upg.twin ? 2 : 1;
+   794→  player.alive = true; player.flashT = 0;
+   795→  player.trailAcc = 0;
+   796→  playerSpr.texture = TEX[shipTexName(ship)];
+   797→  playerSpr.visible = true;
+   798→  S.gun = player.gun;
+   799→}
+   800→
+   801→function playerUpdate (dt) {
+   802→  if (!player.alive) return;
+   803→  const P = player;
+   804→
+   805→  // thrust in world space (WASD), inertia + drag — ship stats override defaults
+   806→  let ax = (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
+   807→  let ay = (K.KeyS || K.ArrowDown ? 1 : 0) - (K.KeyW || K.ArrowUp ? 1 : 0);
+   808→  const mag = Math.hypot(ax, ay);
+   809→  P.thrust = mag > 0 ? 1 : 0;
+   810→  if (mag > 0) { ax /= mag; ay /= mag; }
+   811→  P.vx += ax * P.ship.accel * dt;
+   812→  P.vy += ay * P.ship.accel * dt;
+   813→  const k = Math.exp(-P.ship.drag * dt);
+   814→  P.vx *= k; P.vy *= k;
+   815→  const sp = Math.hypot(P.vx, P.vy);
+   816→  if (sp > P.ship.maxSpeed) { P.vx *= P.ship.maxSpeed / sp; P.vy *= P.ship.maxSpeed / sp; }
+   817→  P.x += P.vx * dt; P.y += P.vy * dt;
+   818→
+   819→  // soft walls — bounce + squash so the box feels physical
+   820→  const b = CFG.world.bound + P.ship.radius;
+   821→  let bounced = 0;
+   822→  if (P.x < b)     { P.x = b;     if (P.vx < 0) { P.vx *= -PC.wallBounce; bounced = 1; P.squashX = 0.16; } }
+   823→  if (P.x > W - b) { P.x = W - b; if (P.vx > 0) { P.vx *= -PC.wallBounce; bounced = 1; P.squashX = 0.16; } }
+   824→  if (P.y < b)     { P.y = b;     if (P.vy < 0) { P.vy *= -PC.wallBounce; bounced = 1; P.squashY = 0.16; } }
+   825→  if (P.y > H - b) { P.y = H - b; if (P.vy > 0) { P.vy *= -PC.wallBounce; bounced = 1; P.squashY = 0.16; } }
+   826→  if (bounced) { addTrauma(CFG.feel.traumaWall); puff(P.x, P.y, 4, 0x9d5cff, 70); }
+   827→
+   828→  // face the cursor (smoothed so aim stays readable)
+   829→  const ta = Math.atan2(M.y - P.y, M.x - P.x);
+   830→  P.angle = lerpAngle(P.angle, ta, damp(PC.turnLerp, dt));
+   831→
+   832→  // engine trail — rate scales with thrust and speed, color per ship
+   833→  P.trailAcc += P.thrust * (0.35 + 0.65 * sp / P.ship.maxSpeed) * PC.trailRate * dt;
+   834→  while (P.trailAcc >= 1) {
+   835→    P.trailAcc -= 1;
+   836→    const back = P.angle + Math.PI;
+   837→    emit({
+   838→      tex: TEX.dot, tint: P.ship.trail,
+   839→      x: P.x + Math.cos(back) * 14 + rand(-3, 3),
+   840→      y: P.y + Math.sin(back) * 14 + rand(-3, 3),
+   841→      vx: Math.cos(back) * rand(30, 90) + P.vx * 0.25,
+   842→      vy: Math.sin(back) * rand(30, 90) + P.vy * 0.25,
+   843→      life: rand(0.22, 0.42), size: rand(0.45, 0.85), drag: 3.5,
+   844→    });
+   845→  }
+   846→
+   847→  // fire — hold LMB, or always when AUTO-FIRE accessibility toggle is on
+   848→  P.fireCd -= dt;
+   849→  const gt = CFG.gunTiers[P.gun - 1];
+   850→  const rate = gt.rate * (META.upg.overcharge ? 1.18 : 1);
+   851→  if ((META.autoFire || M.down) && P.fireCd <= 0) {
+   852→    P.fireCd = 1 / rate;
+   853→    fireBullet(gt);
+   854→  }
+   855→
+   856→  // i-frame blink
+   857→  P.iframes = Math.max(0, P.iframes - dt);
+   858→  P.flashT = Math.max(0, P.flashT - dt);
+   859→
+   860→  // sprite transform (thrust stretch + squash + banking tilt)
+   861→  P.squashX = Math.max(0, P.squashX - dt * 1.4);
+   862→  P.squashY = Math.max(0, P.squashY - dt * 1.4);
+   863→  const lat = Math.cos(P.angle) * P.vy - Math.sin(P.angle) * P.vx; // lateral velocity
+   864→  const bank = clamp(lat * 0.0007, -0.22, 0.22);
+   865→  playerSpr.texture = P.flashT > 0 ? TEX['shipW_' + P.ship.name] : TEX[shipTexName(P.ship)];
+   866→  playerSpr.position.set(P.x, P.y);
+   867→  playerSpr.rotation = P.angle + bank;
+   868→  playerSpr.scale.set(
+   869→    P.ship.scale * (1 + P.thrust * 0.10) * (1 - P.squashX * 1.6),
+   870→    P.ship.scale * (1 - P.thrust * 0.06) * (1 - P.squashY * 1.6)
+   871→  );
+   872→  playerSpr.alpha = P.iframes > 0 ? (Math.sin(S.time * 42) > 0 ? 1 : 0.25) : 1;
+   873→}
+   874→
+   875→function playerHit (dx, dy, knockMul = 1) {
+   876→  const P = player;
+   877→  P.hp -= 1;
+   878→  P.iframes = DIFF().iframes;
+   879→  S.flashA = CFG.feel.hurtFlash;
+   880→  S.rgbT = CFG.feel.rgbHurt;
+   881→  addTrauma(CFG.feel.traumaHurt);
+   882→  hitstop(CFG.feel.hitstopHurt);
+   883→  // knockback away from the source
+   884→  const d = Math.hypot(dx, dy) || 1;
+   885→  P.vx += (dx / d) * 220 * knockMul; P.vy += (dy / d) * 220 * knockMul;
+   886→  puff(P.x, P.y, 10, P.ship.color, 160);
+   887→  A.hurt();
+   888→  if (S.combo > 0) { S.combo = 0; S.comboT = 0; popup(P.x, P.y - 26, 'COMBO LOST', '#8f7fb8', 12); }
+   889→  hudHP();
+   890→  if (P.hp <= 0) playerDie();
+   891→}
+   892→
+   893→function playerDie () {
+   894→  const P = player;
+   895→  P.alive = false;
+   896→  playerSpr.visible = false;
+   897→  M.down = false;
+   898→  // big ship-colored detonation
+   899→  for (let i = 0; i < 26; i++) {
+   900→    const a = rand(TAU), sp = rand(120, 520);
+   901→    emit({ tex: TEX.spark, tint: Math.random() < 0.5 ? P.ship.color : P.ship.trail, x: P.x, y: P.y,
+   902→      vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.4, 0.9), size: rand(0.6, 1.2), drag: 2.4, rot: rand(TAU) });
+   903→  }
+   904→  for (let i = 0; i < 6; i++) {
+   905→    const a = rand(TAU), sp = rand(20, 110);
+   906→    emit({ tex: TEX.dot, tint: P.ship.color, x: P.x, y: P.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+   907→      life: rand(0.6, 1.1), size: rand(1.2, 2), grow: 1.6, drag: 1.4, alpha: 0.6 });
+   908→  }
+   909→  ring(P.x, P.y, P.ship.color, 3.2, 0.45);
+   910→  ring(P.x, P.y, P.ship.trail, 2.2, 0.6);
+   911→  addTrauma(1);
+   912→  hitstop(0.09);
+   913→  S.flashA = 0.32;
+   914→  A.boom();
+   915→  S.mode = 'dying';
+   916→  S.dyingT = CFG.feel.dyingTime;
+   917→  S.timescale = CFG.feel.dyingSlowmo;
+   918→}
+   919→
+   920→/* ===== 05 BULLETS — player gun tiers 1..5 ===== */
+   921→const bulletPool = makePool(CFG.pools.bullets, () => spriteOf(TEX.bullet), bulletL);
+   922→
+   923→function fireBullet (gt) {
+   924→  const P = player;
+   925→  const n = gt.count;
+   926→  for (let i = 0; i < n; i++) {
+   927→    const b = bulletPool.get();
+   928→    if (!b) break;
+   929→    let a = P.angle + rand(-PC.bulletSpread, PC.bulletSpread);
+   930→    let ox = 0, oy = 0;
+   931→    if (n > 1) {
+   932→      if (gt.parallel) {
+   933→        // TWIN — two parallel lanes
+   934→        const px = -Math.sin(P.angle), py = Math.cos(P.angle);
+   935→        const lane = (i - (n - 1) / 2) * 9;
+   936→        ox = px * lane; oy = py * lane;
+   937→        a = P.angle + rand(-PC.bulletSpread, PC.bulletSpread);
+   938→      } else {
+   939→        // fan spread
+   940→        const t = n === 1 ? 0 : (i / (n - 1)) - 0.5;
+   941→        a = P.angle + t * gt.spread * 2 + rand(-PC.bulletSpread, PC.bulletSpread);
+   942→      }
+   943→    }
+   944→    b.texture = TEX[gt.tex];
+   945→    b.x = P.x + Math.cos(P.angle) * 18 + ox;
+   946→    b.y = P.y + Math.sin(P.angle) * 18 + oy;
+   947→    b.vx = Math.cos(a) * gt.speed;
+   948→    b.vy = Math.sin(a) * gt.speed;
+   949→    b.life = gt.life;
+   950→    b.dmg = gt.dmg;
+   951→    b.pierce = gt.pierce;
+   952→    b.last = null;
+   953→    b.wob = gt.wave || 0;
+   954→    b.wt = 0;
+   955→    b.px = -Math.sin(a); b.py = Math.cos(a);
+   956→    b.rotation = a;
+   957→    b.scale.set(rand(0.9, 1.1));
+   958→    // muzzle flash
+   959→    emit({ tex: TEX.dot, tint: COL.core, x: b.x, y: b.y, vx: Math.cos(a) * 60, vy: Math.sin(a) * 60, life: 0.07, size: 0.9, drag: 2 });
+   960→  }
+   961→  A.shoot(P.gun);
+   962→}
+   963→
+   964→function updateBullets (dt) {
+   965→  for (const b of bulletPool.items) {
+   966→    if (!b.active) continue;
+   967→    b.life -= dt;
+   968→    if (b.life <= 0 || b.x < -20 || b.x > W + 20 || b.y < -20 || b.y > H + 20) {
+   969→      bulletPool.release(b); continue;
+   970→    }
+   971→    b.wt += dt;
+   972→    const wv = b.wob ? Math.cos(b.wt * 16) * b.wob * 420 : 0;
+   973→    b.x += (b.vx + b.px * wv) * dt;
+   974→    b.y += (b.vy + b.py * wv) * dt;
+   975→  }
+   976→}
+   977→
+   978→/* ===== 06 ENEMIES — drone / hunter / spinner / tank ===== */
+   979→const EKIND = {
+   980→  drone:   { cfg: CFG.drone,   tex: 'drone',   color: COL.drone,   hi: COL.droneHi   },
+   981→  hunter:  { cfg: CFG.hunter,  tex: 'hunter',  color: COL.hunter,  hi: COL.hunterHi  },
+   982→  spinner: { cfg: CFG.spinner, tex: 'spinner', color: COL.spinner, hi: COL.spinnerHi },
+   983→  tank:    { cfg: CFG.tank,    tex: 'tank',    color: COL.tank,    hi: COL.tankHi    },
+   984→};
+   985→const enemyPool = makePool(CFG.pools.enemies, () => spriteOf(TEX.drone), enemyL);
+   986→const telePool = makePool(CFG.pools.teles, () => spriteOf(TEX.ring), fxL); // spawn telegraphs
+   987→
+   988→function tierOf (wave) { return 1 + Math.floor((wave - 1) / CFG.waves.tierEvery); }
+   989→function enemyHp (kind, tier) {
+   990→  const c = EKIND[kind].cfg;
+   991→  return c.hp + (tier - 1) * (c.hpPerTier || 0);
+   992→}
+   993→function sharedSpeedMult () {
+   994→  return Math.min(CFG.waves.speedCap, 1 + (S.wave - 1) * 0.055 + (S.tier - 1) * 0.05) * DIFF().speed;
+   995→}
+   996→
+   997→function spawnPoint () {
+   998→  const I = CFG.world.spawnInset, depth = 90;
+   999→  for (let tries = 0; tries < 14; tries++) {
+  1000→    let x, y;
+  1001→    const edge = (Math.random() * 4) | 0;
+  1002→    if (edge === 0)      { x = rand(I, W - I); y = I + rand(depth); }
+  1003→    else if (edge === 1) { x = rand(I, W - I); y = H - I - rand(depth); }
+  1004→    else if (edge === 2) { x = I + rand(depth);        y = rand(I, H - I); }
+  1005→    else                 { x = W - I - rand(depth);    y = rand(I, H - I); }
+  1006→    if (Math.hypot(x - player.x, y - player.y) >= CFG.waves.minPlayerDist) return { x, y };
+  1007→  }
+  1008→  return { x: I + rand(40), y: I + rand(40) };
+  1009→}
+  1010→
+  1011→function telegraphSpawn (kind) {
+  1012→  const t = telePool.get();
+  1013→  if (!t) return false;
+  1014→  const p = spawnPoint();
+  1015→  t.texture = TEX.ring; t.tint = EKIND[kind].color;
+  1016→  t.x = p.x; t.y = p.y;
+  1017→  t.t = CFG.waves.telegraph; t.dur = CFG.waves.telegraph;
+  1018→  t.x0 = p.x; t.y0 = p.y; t.kind = kind;
+  1019→  t.alpha = 0.9; t.scale.set(1.1);
+  1020→  return true;
+  1021→}
+  1022→
+  1023→function updateTeles (dt) {
+  1024→  for (const t of telePool.items) {
+  1025→    if (!t.active) continue;
+  1026→    t.t -= dt;
+  1027→    const k = clamp(t.t / t.dur, 0, 1);
+  1028→    t.scale.set(lerp(0.28, 1.1, k));
+  1029→    t.alpha = 0.35 + 0.65 * (1 - k) + 0.25 * Math.sin(S.time * 24);
+  1030→    if (t.t <= 0) {
+  1031→      telePool.release(t);
+  1032→      spawnEnemy(t.kind, t.x0, t.y0);
+  1033→    }
+  1034→  }
+  1035→}
+  1036→
+  1037→function spawnEnemy (kind, x, y) {
+  1038→  const d = enemyPool.get();
+  1039→  if (!d) return;
+  1040→  const K = EKIND[kind], c = K.cfg;
+  1041→  d.kind = kind; d.cfg = c; d.k = K;
+  1042→  d.x = x; d.y = y;
+  1043→  d.vx = 0; d.vy = 0;
+  1044→  d.hp = enemyHp(kind, S.tier);
+  1045→  d.radius = c.radius;
+  1046→  d.phase = rand(TAU);
+  1047→  d.rotA = rand(TAU);
+  1048→  d.flashT = 0;
+  1049→  d.spawnK = 0;
+  1050→  d.scale.set(0.1);
+  1051→  d.orb = Math.random() < 0.5 ? 1 : -1;      // hunter strafe dir
+  1052→  d.fireT = rand(c.fireMin || 1, c.fireMax || 2); // hunter
+  1053→  d.cool = rand(0.8, 1.6);                   // spinner / tank cycle
+  1054→  d.sprayT = 0; d.emitCd = 0; d.sprA = rand(TAU);
+  1055→  d.ax = rand(W * 0.25, W * 0.75); d.ay = rand(H * 0.25, H * 0.75); // spinner anchor
+  1056→  d.texN = K.tex;
+  1057→  d.texture = TEX[K.tex];
+  1058→  puff(x, y, 6, K.color, 120);
+  1059→  ring(x, y, K.color, 1.1, 0.3);
+  1060→}
+  1061→
+  1062→// --- enemy bullets ---
+  1063→const ebPool = makePool(CFG.pools.ebullets, () => spriteOf(TEX.ebullet), bulletL);
+  1064→function fireEnemyBullet (x, y, ang, speed, tint) {
+  1065→  const b = ebPool.get();
+  1066→  if (!b) return;
+  1067→  b.x = x; b.y = y;
+  1068→  const sp = speed * DIFF().bullet;
+  1069→  b.vx = Math.cos(ang) * sp; b.vy = Math.sin(ang) * sp;
+  1070→  b.life = 7;
+  1071→  b.tint = tint;
+  1072→  b.scale.set(1);
+  1073→  b.rotation = 0;
+  1074→}
+  1075→
+  1076→function updateEBullets (dt) {
+  1077→  for (const b of ebPool.items) {
+  1078→    if (!b.active) continue;
+  1079→    b.life -= dt;
+  1080→    if (b.life <= 0 || b.x < 8 || b.x > W - 8 || b.y < 8 || b.y > H - 8) {
+  1081→      ebPool.release(b); continue;
+  1082→    }
+  1083→    b.x += b.vx * dt; b.y += b.vy * dt;
+  1084→    // player collision
+  1085→    if (player.alive && S.mode === 'playing' && player.iframes <= 0) {
+  1086→      const rr = 4.5 + player.ship.radius;
+  1087→      if (Math.abs(b.x - player.x) < rr && Math.abs(b.y - player.y) < rr &&
+  1088→          Math.hypot(b.x - player.x, b.y - player.y) < rr) {
+  1089→        ebPool.release(b);
+  1090→        playerHit(player.x - b.x, player.y - b.y);
+  1091→        continue;
+  1092→      }
+  1093→    }
+  1094→  }
+  1095→}
+  1096→
+  1097→// --- per-kind AI ---
+  1098→function updateEnemies (dt) {
+  1099→  const chasing = player.alive && S.mode === 'playing';
+  1100→  const actives = [];
+  1101→  for (const d of enemyPool.items) if (d.active) actives.push(d);
+  1102→
+  1103→  for (const d of actives) {
+  1104→    d.flashT = Math.max(0, d.flashT - dt);
+  1105→    d.spawnK = Math.min(1, d.spawnK + dt * 4.5);
+  1106→    const c = d.cfg;
+  1107→
+  1108→    if (d.kind === 'drone') {
+  1109→      d.rotA += c.spin * dt;
+  1110→      if (chasing) {
+  1111→        const dx = player.x - d.x, dy = player.y - d.y;
+  1112→        const wob = Math.sin(S.time * c.weaveFreq + d.phase) * c.weaveAmp;
+  1113→        const ang = Math.atan2(dy, dx) + wob;
+  1114→        const ms = c.baseSpeed * Math.min(c.speedCap, 1 + (S.wave - 1) * c.speedRamp) * DIFF().speed;
+  1115→        const dvx = Math.cos(ang) * ms - d.vx, dvy = Math.sin(ang) * ms - d.vy;
+  1116→        const dl = Math.hypot(dvx, dvy) || 1;
+  1117→        const st = Math.min(c.accel * dt, dl);
+  1118→        d.vx += (dvx / dl) * st; d.vy += (dvy / dl) * st;
+  1119→        // separation — keeps the swarm readable instead of one blob
+  1120→        for (const o of actives) {
+  1121→          if (o === d || o.kind !== 'drone') continue;
+  1122→          const sx = d.x - o.x, sy = d.y - o.y;
+  1123→          const sd = Math.hypot(sx, sy);
+  1124→          if (sd > 0.01 && sd < c.sepDist) {
+  1125→            d.vx += (sx / sd) * c.sepForce * dt;
+  1126→            d.vy += (sy / sd) * c.sepForce * dt;
+  1127→          }
+  1128→        }
+  1129→      } else { d.vx *= Math.exp(-0.8 * dt); d.vy *= Math.exp(-0.8 * dt); }
+  1130→      d.texture = d.flashT > 0 ? TEX.droneW : TEX.drone;
+  1131→      d.rotation = d.rotA;
+  1132→      const pulse = 1 + Math.sin(S.time * c.pulseRate + d.phase) * c.pulseAmp;
+  1133→      const popIn = 1 - Math.pow(1 - d.spawnK, 3);
+  1134→      d.scale.set(popIn * pulse * (d.spawnK < 1 ? 1.15 : 1));
+  1135→    }
+  1136→
+  1137→    else if (d.kind === 'hunter') {
+  1138→      if (chasing) {
+  1139→        const dx = player.x - d.x, dy = player.y - d.y;
+  1140→        const dist = Math.hypot(dx, dy) || 1;
+  1141→        const ms = c.baseSpeed * sharedSpeedMult();
+  1142→        let tx, ty;
+  1143→        if (dist > c.ring + c.ringSlack)      { tx = dx / dist; ty = dy / dist; }
+  1144→        else if (dist < c.ring - c.ringSlack) { tx = -dx / dist; ty = -dy / dist; }
+  1145→        else { tx = (-dy / dist) * d.orb; ty = (dx / dist) * d.orb; }
+  1146→        const dvx = tx * ms - d.vx, dvy = ty * ms - d.vy;
+  1147→        const dl = Math.hypot(dvx, dvy) || 1;
+  1148→        const st = Math.min(c.accel * dt, dl);
+  1149→        d.vx += (dvx / dl) * st; d.vy += (dvy / dl) * st;
+  1150→
+  1151→        // fire cycle: charge telegraph → predictive shot
+  1152→        d.fireT -= dt;
+  1153→        if (d.fireT <= 0 && d.spawnK >= 1) {
+  1154→          const predict = Math.min(0.95, c.predict + S.wave * 0.02);
+  1155→          const tof = dist / (c.bulletSpeed * DIFF().bullet);
+  1156→          const aim = Math.atan2(dy + player.vy * tof * predict, dx + player.vx * tof * predict);
+  1157→          if (S.tier >= 2 && Math.random() < 0.4) {
+  1158→            fireEnemyBullet(d.x, d.y, aim - 0.18, c.bulletSpeed, d.k.color);
+  1159→            fireEnemyBullet(d.x, d.y, aim,          c.bulletSpeed, d.k.color);
+  1160→            fireEnemyBullet(d.x, d.y, aim + 0.18, c.bulletSpeed, d.k.color);
+  1161→          } else {
+  1162→            fireEnemyBullet(d.x, d.y, aim, c.bulletSpeed, d.k.color);
+  1163→          }
+  1164→          puff(d.x, d.y, 3, d.k.hi, 60);
+  1165→          A.ui();
+  1166→          d.fireT = rand(c.fireMin, c.fireMax) / Math.min(1.4, 1 + (S.tier - 1) * 0.12);
+  1167→        }
+  1168→        d.rotation = Math.atan2(dy, dx);
+  1169→      } else { d.vx *= Math.exp(-0.8 * dt); d.vy *= Math.exp(-0.8 * dt); }
+  1170→      d.texture = d.flashT > 0 || (chasing && d.fireT < c.charge && d.fireT < 0.14)
+  1171→        ? TEX.hunterW : TEX.hunter;
+  1172→      const chargePulse = chasing && d.fireT < c.charge ? 1 + 0.16 * Math.sin(S.time * 26) : 1;
+  1173→      const popIn = 1 - Math.pow(1 - d.spawnK, 3);
+  1174→      d.scale.set(popIn * chargePulse);
+  1175→    }
+  1176→
+  1177→    else if (d.kind === 'spinner') {
+  1178→      d.rotA += c.spin * dt;
+  1179→      d.sprA += c.sprayRot * dt;
+  1180→      if (chasing) {
+  1181→        // drift toward a wandering interior anchor
+  1182→        const ddx = d.ax - d.x, ddy = d.ay - d.y;
+  1183→        const dd = Math.hypot(ddx, ddy);
+  1184→        if (dd < 30 || d.cool > c.coolDur + 5) {
+  1185→          d.ax = rand(W * 0.22, W * 0.78); d.ay = rand(H * 0.22, H * 0.78);
+  1186→        }
+  1187→        const ms = c.baseSpeed * sharedSpeedMult();
+  1188→        const dl2 = dd || 1;
+  1189→        const dvx = (ddx / dl2) * ms - d.vx, dvy = (ddy / dl2) * ms - d.vy;
+  1190→        const dl = Math.hypot(dvx, dvy) || 1;
+  1191→        const st = Math.min(c.accel * dt, dl);
+  1192→        d.vx += (dvx / dl) * st; d.vy += (dvy / dl) * st;
+  1193→
+  1194→        // spiral spray cycle
+  1195→        if (d.sprayT > 0) {
+  1196→          d.sprayT -= dt;
+  1197→          d.emitCd -= dt;
+  1198→          if (d.emitCd <= 0 && d.spawnK >= 1) {
+  1199→            d.emitCd = c.sprayEvery;
+  1200→            fireEnemyBullet(d.x, d.y, d.sprA,          c.bulletSpeed, d.k.color);
+  1201→            fireEnemyBullet(d.x, d.y, d.sprA + Math.PI, c.bulletSpeed, d.k.color);
+  1202→          }
+  1203→          if (d.sprayT <= 0) d.cool = c.coolDur;   // spray finished → cool down
+  1204→        } else {
+  1205→          d.cool -= dt;
+  1206→          if (d.cool <= 0) { d.sprayT = c.sprayDur; d.emitCd = 0; }
+  1207→        }
+  1208→      } else { d.vx *= Math.exp(-0.8 * dt); d.vy *= Math.exp(-0.8 * dt); }
+  1209→      d.texture = d.flashT > 0 ? TEX.spinnerW : TEX.spinner;
+  1210→      d.rotation = d.rotA;
+  1211→      const popIn = 1 - Math.pow(1 - d.spawnK, 3);
+  1212→      d.scale.set(popIn);
+  1213→    }
+  1214→
+  1215→    else if (d.kind === 'tank') {
+  1216→      d.rotA += 0.4 * dt;
+  1217→      if (chasing) {
+  1218→        const dx = player.x - d.x, dy = player.y - d.y;
+  1219→        const dist = Math.hypot(dx, dy) || 1;
+  1220→        const ms = c.baseSpeed * sharedSpeedMult();
+  1221→        const dvx = (dx / dist) * ms - d.vx, dvy = (dy / dist) * ms - d.vy;
+  1222→        const dl = Math.hypot(dvx, dvy) || 1;
+  1223→        const st = Math.min(c.accel * dt, dl);
+  1224→        d.vx += (dvx / dl) * st; d.vy += (dvy / dl) * st;
+  1225→
+  1226→        // periodic radial ring
+  1227→        d.cool -= dt;
+  1228→        if (d.cool <= 0 && d.spawnK >= 1) {
+  1229→          d.cool = c.fireCd;
+  1230→          const n = Math.min(14, c.ringCount + (S.tier - 1) * 2);
+  1231→          const off = rand(TAU);
+  1232→          for (let i = 0; i < n; i++) {
+  1233→            fireEnemyBullet(d.x, d.y, off + i / n * TAU, c.ringSpeed, d.k.color);
+  1234→          }
+  1235→          ring(d.x, d.y, d.k.color, 1.5, 0.3);
+  1236→          A.ui();
+  1237→        }
+  1238→        d.rotation = Math.atan2(dy, dx);
+  1239→      } else { d.vx *= Math.exp(-0.8 * dt); d.vy *= Math.exp(-0.8 * dt); }
+  1240→      d.texture = d.flashT > 0 ? TEX.tankW : TEX.tank;
+  1241→      const popIn = 1 - Math.pow(1 - d.spawnK, 3);
+  1242→      d.scale.set(popIn);
+  1243→    }
+  1244→
+  1245→    d.x += d.vx * dt; d.y += d.vy * dt;
+  1246→
+  1247→    // soft walls
+  1248→    const m = CFG.world.bound + 8;
+  1249→    if (d.x < m)     { d.x = m;     if (d.vx < 0) d.vx *= -0.5; }
+  1250→    if (d.x > W - m) { d.x = W - m; if (d.vx > 0) d.vx *= -0.5; }
+  1251→    if (d.y < m)     { d.y = m;     if (d.vy < 0) d.vy *= -0.5; }
+  1252→    if (d.y > H - m) { d.y = H - m; if (d.vy > 0) d.vy *= -0.5; }
+  1253→  }
+  1254→
+  1255→  // contact damage
+  1256→  if (chasing && player.iframes <= 0) {
+  1257→    for (const d of actives) {
+  1258→      const rr = player.ship.radius + d.radius;
+  1259→      if (Math.abs(d.x - player.x) < rr && Math.abs(d.y - player.y) < rr) {
+  1260→        if (Math.hypot(d.x - player.x, d.y - player.y) < rr) {
+  1261→          if (d.kind === 'drone') {
+  1262→            killEnemy(d, false);      // kamikaze drone pops — no score
+  1263→          } else {
+  1264→            // heavy bodies shove you and stay alive
+  1265→            const dx = player.x - d.x, dy = player.y - d.y;
+  1266→            const dd = Math.hypot(dx, dy) || 1;
+  1267→            player.vx += (dx / dd) * 260; player.vy += (dy / dd) * 260;
+  1268→            d.vx -= (dx / dd) * 80; d.vy -= (dy / dd) * 80;
+  1269→          }
+  1270→          playerHit(player.x - d.x, player.y - d.y, d.kind === 'tank' ? d.cfg.knock : 1);
+  1271→          break;
+  1272→        }
+  1273→      }
+  1274→    }
+  1275→  }
+  1276→}
+  1277→
+  1278→/* ===== 07 COLLISIONS — player bullets vs enemies ===== */
+  1279→function collideBullets () {
+  1280→  for (const b of bulletPool.items) {
+  1281→    if (!b.active) continue;
+  1282→    for (const d of enemyPool.items) {
+  1283→      if (!d.active || d === b.last) continue;
+  1284→      const rr = 3.5 + d.radius;
+  1285→      if (Math.abs(b.x - d.x) < rr && Math.abs(b.y - d.y) < rr) {
+  1286→        if (Math.hypot(b.x - d.x, b.y - d.y) < rr) {
+  1287→          b.last = d;
+  1288→          hitEnemy(d, b.vx, b.vy, b.dmg);
+  1289→          if (b.pierce > 0) { b.pierce -= 1; b.dmg = Math.max(1, b.dmg - 1); }
+  1290→          else { bulletPool.release(b); break; }
+  1291→        }
+  1292→      }
+  1293→    }
+  1294→  }
+  1295→}
+  1296→
+  1297→function hitEnemy (d, bvx, bvy, dmg) {
+  1298→  d.hp -= dmg;
+  1299→  if (d.hp > 0) {
+  1300→    d.flashT = 0.07;
+  1301→    const bl = Math.hypot(bvx, bvy) || 1;
+  1302→    const kb = d.kind === 'tank' ? 60 : 190;
+  1303→    d.vx += (bvx / bl) * kb; d.vy += (bvy / bl) * kb;
+  1304→    puff(d.x, d.y, 3, d.k.hi, 110);
+  1305→    return;
+  1306→  }
+  1307→  killEnemy(d, true);
+  1308→}
+  1309→
+  1310→function killEnemy (d, giveScore) {
+  1311→  const x = d.x, y = d.y;
+  1312→  const K = d.k, c = d.cfg;
+  1313→  enemyPool.release(d);
+  1314→  burstKill(x, y, K.color, K.hi);
+  1315→  ring(x, y, K.color, d.kind === 'tank' ? 2.8 : 1.9, 0.3);
+  1316→  ghost(x, y, TEX[K.tex + 'W'], d.kind === 'tank' ? 1.25 : 1);
+  1317→  addTrauma(CFG.feel.traumaKill * (d.kind === 'tank' ? 1.6 : 1));
+  1318→  hitstop(d.kind === 'tank' ? 0.09 : CFG.feel.hitstopKill);
+  1319→  S.gridPulse += CFG.feel.gridPulseKill;
+  1320→  if (d.kind === 'tank') A.boom(); else A.kill();
+  1321→  if (d.kind === 'tank') {
+  1322→    // death burst — do not stand still
+  1323→    const n = 10, off = rand(TAU);
+  1324→    for (let i = 0; i < n; i++) fireEnemyBullet(x, y, off + i / n * TAU, 160, K.color);
+  1325→  }
+  1326→  if (giveScore) {
+  1327→    const mult = comboMult();
+  1328→    const pts = Math.round(c.score * mult * DIFF().mult / 10) * 10;
+  1329→    S.score += pts;
+  1330→    S.kills += 1;
+  1331→    S.combo += 1;
+  1332→    S.comboT = CFG.combo.window;
+  1333→    const pcol = mult >= 3.5 ? '#ff2ec4' : mult >= 2 ? '#ffd23c' : COL.core;
+  1334→    popup(x, y, '+' + pts, pcol);
+  1335→    if (mult >= 2) popup(x, y - 20, '×' + mult.toFixed(1), pcol, 12);
+  1336→    hudScore();
+  1337→    checkNewBest();
+  1338→    rollDrops(x, y, d.kind);
+  1339→  }
+  1340→}
+  1341→
+  1342→/* ===== 07b PICKUPS — heart / gun / coin with magnet pull ===== */
+  1343→const pickupPool = makePool(CFG.pools.pickups, () => spriteOf(TEX.coin), pickupL);
+  1344→const PICKUP_TEX = { heart: TEX.heart, gun: TEX.gunpk, coin: TEX.coin };
+  1345→
+  1346→function dropPickup (x, y, kind) {
+  1347→  const p = pickupPool.get();
+  1348→  if (!p) return;
+  1349→  p.kind = kind;
+  1350→  p.texture = PICKUP_TEX[kind];
+  1351→  p.x = x; p.y = y;
+  1352→  const a = rand(TAU);
+  1353→  p.vx = Math.cos(a) * rand(50, 110);
+  1354→  p.vy = Math.sin(a) * rand(50, 110);
+  1355→  p.life = CFG.pickup.life;
+  1356→  p.t = rand(TAU);
+  1357→  p.scale.set(1);
+  1358→  p.alpha = 1;
+  1359→}
+  1360→
+  1361→function rollDrops (x, y, kind) {
+  1362→  const t = CFG.drops[kind];
+  1363→  if (pickupPool.countActive() >= CFG.pickup.maxField && kind !== 'tank') return;
+  1364→  const nCoins = t.coins ? t.coins() : (Math.random() < t.coin ? 1 : 0);
+  1365→  for (let i = 0; i < nCoins; i++) dropPickup(x + rand(-14, 14), y + rand(-14, 14), 'coin');
+  1366→  if (Math.random() < t.heart && player.hp < player.hpMax) dropPickup(x, y, 'heart');
+  1367→  else if (Math.random() < t.gun && player.gun < 5) dropPickup(x, y, 'gun');
+  1368→}
+  1369→
+  1370→function comboMult () {
+  1371→  return Math.min(CFG.combo.cap, 1 + S.combo * CFG.combo.step);
+  1372→}
+  1373→
+  1374→function updatePickups (dt) {
+  1375→  const magnetR = CFG.pickup.magnetR * (META.upg.magnet ? 1.7 : 1);
+  1376→  for (const p of pickupPool.items) {
+  1377→    if (!p.active) continue;
+  1378→    p.life -= dt;
+  1379→    if (p.life <= 0) { pickupPool.release(p); continue; }
+  1380→    p.t += dt;
+  1381→    // magnet pull
+  1382→    if (player.alive) {
+  1383→      const dx = player.x - p.x, dy = player.y - p.y;
+  1384→      const d = Math.hypot(dx, dy) || 1;
+  1385→      if (d < magnetR) {
+  1386→        p.vx += (dx / d) * CFG.pickup.pull * dt;
+  1387→        p.vy += (dy / d) * CFG.pickup.pull * dt;
+  1388→        const sp = Math.hypot(p.vx, p.vy);
+  1389→        if (sp > CFG.pickup.pullCap) { p.vx *= CFG.pickup.pullCap / sp; p.vy *= CFG.pickup.pullCap / sp; }
+  1390→      } else {
+  1391→        p.vx *= Math.exp(-1.4 * dt); p.vy *= Math.exp(-1.4 * dt);
+  1392→      }
+  1393→      if (d < CFG.pickup.collect) { collectPickup(p); continue; }
+  1394→    } else {
+  1395→      p.vx *= Math.exp(-1.4 * dt); p.vy *= Math.exp(-1.4 * dt);
+  1396→    }
+  1397→    p.x += p.vx * dt; p.y += p.vy * dt;
+  1398→    // visuals: blink out, coins spin, hearts/guns bob
+  1399→    p.alpha = p.life < 2.5 ? (Math.sin(S.time * 22) > 0 ? 1 : 0.25) : 1;
+  1400→    if (p.kind === 'coin') {
+  1401→      p.rotation = 0;
+  1402→      p.scale.set(0.35 + 0.65 * Math.abs(Math.cos(p.t * 4.2)));
+  1403→    } else {
+  1404→      p.scale.set(1 + Math.sin(p.t * 3.4) * 0.08);
+  1405→      p.rotation = Math.sin(p.t * 2.2) * 0.12;
+  1406→    }
+  1407→  }
+  1408→}
+  1409→
+  1410→function collectPickup (p) {
+  1411→  const x = p.x, y = p.y;
+  1412→  pickupPool.release(p);
+  1413→  if (p.kind === 'coin') {
+  1414→    S.runCoins += CFG.pickup.coinValue;
+  1415→    popup(x, y, '+' + CFG.pickup.coinValue + ' CR', '#ffd23c', 14);
+  1416→    puff(x, y, 5, COL.coin, 90);
+  1417→    A.coin();
+  1418→    hudScore();
+  1419→  } else if (p.kind === 'heart') {
+  1420→    player.hp = Math.min(player.hpMax, player.hp + 1);
+  1421→    popup(x, y, '+1 HP', '#ff8fa3', 15);
+  1422→    ring(x, y, COL.heart, 1.4, 0.35);
+  1423→    puff(x, y, 6, COL.heart, 100);
+  1424→    A.heal();
+  1425→    hudHP();
+  1426→  } else if (p.kind === 'gun') {
+  1427→    if (player.gun < 5) {
+  1428→      player.gun += 1;
+  1429→      S.gun = player.gun;
+  1430→      const gt = CFG.gunTiers[player.gun - 1];
+  1431→      popup(x, y, gt.name + ' ONLINE', '#9dff3c', 16);
+  1432→      ring(x, y, COL.gunpk, 1.7, 0.4);
+  1433→      puff(x, y, 8, COL.gunpk, 120);
+  1434→      A.gun();
+  1435→      hudGun();
+  1436→    } else {
+  1437→      const pts = 250;
+  1438→      S.score += pts;
+  1439→      popup(x, y, 'MAX +' + pts, '#9dff3c', 15);
+  1440→      A.coin();
+  1441→      hudScore();
+  1442→    }
+  1443→  }
+  1444→}
+  1445→
+  1446→/* ===== 08 WAVES — budget director with breathers + tiers ===== */
+  1447→const Wv = { n: 0, queue: [], spawnCd: 0, phase: 'idle', breatherT: 0 };
+  1448→// phase: idle (title) | spawning | breather
+  1449→
+  1450→function buildQueue (budget, wave) {
+  1451→  const avail = ['drone'];
+  1452→  if (wave >= CFG.waves.unlock.hunter)  avail.push('hunter');
+  1453→  if (wave >= CFG.waves.unlock.spinner) avail.push('spinner');
+  1454→  if (wave >= CFG.waves.unlock.tank)    avail.push('tank');
+  1455→  const q = [];
+  1456→  let b = budget, guard = 0;
+  1457→  while (b > 0 && guard++ < 500) {
+  1458→    // weighted pick among affordable types
+  1459→    let total = 0;
+  1460→    const aff = [];
+  1461→    for (const k of avail) {
+  1462→      if (CFG.waves.cost[k] <= b) { aff.push(k); total += CFG.waves.weights[k]; }
+  1463→    }
+  1464→    if (!aff.length) { q.push('drone'); b -= 1; continue; }
+  1465→    let r = Math.random() * total;
+  1466→    let pick = aff[0];
+  1467→    for (const k of aff) { r -= CFG.waves.weights[k]; if (r <= 0) { pick = k; break; } }
+  1468→    q.push(pick);
+  1469→    b -= CFG.waves.cost[pick];
+  1470→  }
+  1471→  // shuffle lightly so bigs don't always come in the same order
+  1472→  for (let i = q.length - 1; i > 0; i--) {
+  1473→    if (Math.random() < 0.25) {
+  1474→      const j = (Math.random() * (i + 1)) | 0;
+  1475→      [q[i], q[j]] = [q[j], q[i]];
+  1476→    }
+  1477→  }
+  1478→  return q;
+  1479→}
+  1480→
+  1481→function startWave (n) {
+  1482→  Wv.n = n; S.wave = n;
+  1483→  S.tier = tierOf(n);
+  1484→  const budget = Math.floor(CFG.waves.budget(n) * DIFF().budget);
+  1485→  Wv.queue = buildQueue(budget, n);
+  1486→  Wv.spawnCd = 0.7;
+  1487→  Wv.phase = 'spawning';
+  1488→  const tierWave = n > 1 && (n - 1) % CFG.waves.tierEvery === 0;
+  1489→  if (tierWave) {
+  1490→    banner('WAVE ' + n + ' — TIER ' + S.tier + ' // THEY ADAPT', '#ffa23c', 30, 1.8);
+  1491→    A.tier();
+  1492→    addTrauma(0.18);
+  1493→  } else {
+  1494→    banner('WAVE ' + n, COL.text, 40, 1.5);
+  1495→  }
+  1496→  hudWave();
+  1497→}
+  1498→
+  1499→function countHostiles () {
+  1500→  return enemyPool.countActive() + telePool.countActive();
+  1501→}
+  1502→
+  1503→function wavesUpdate (dt) {
+  1504→  if (S.mode !== 'playing') return;
+  1505→  if (Wv.phase === 'spawning') {
+  1506→    if (Wv.queue.length > 0) {
+  1507→      Wv.spawnCd -= dt;
+  1508→      if (Wv.spawnCd <= 0 && countHostiles() < CFG.waves.maxActive) {
+  1509→        if (telegraphSpawn(Wv.queue.shift())) {
+  1510→          Wv.spawnCd = CFG.waves.spawnInterval(Wv.n) * rand(0.75, 1.25);
+  1511→        }
+  1512→      }
+  1513→    } else if (countHostiles() === 0) {
+  1514→      Wv.phase = 'breather';
+  1515→      Wv.breatherT = CFG.waves.breather;
+  1516→      const bonus = CFG.waves.clearBonus(Wv.n);
+  1517→      S.score += bonus;
+  1518→      popup(W / 2, H / 2 - 60, 'WAVE CLEAR  +' + bonus, COL.player, 22);
+  1519→      hudScore();
+  1520→      checkNewBest();
+  1521→    }
+  1522→  } else if (Wv.phase === 'breather') {
+  1523→    Wv.breatherT -= dt;
+  1524→    if (Wv.breatherT <= 0) startWave(Wv.n + 1);
+  1525→  }
+  1526→}
+  1527→
+  1528→/* ===== 09 SCORING + HUD (crisp layer, outside bloom) ===== */
+  1529→function pad (n, l) { return String(Math.max(0, n | 0)).padStart(l, '0'); }
+  1530→function mkText (str, size, weight, color, ls = 0, align = 'center') {
+  1531→  return new PIXI.Text({
+  1532→    text: str,
+  1533→    style: {
+  1534→      fontFamily: 'Orbitron, Arial', fontSize: size, fontWeight: String(weight),
+  1535→      fill: color, letterSpacing: ls, align,
+  1536→    },
+  1537→  });
+  1538→}
+  1539→
+  1540→const scoreT = mkText('SCORE 000000', 20, 700, COL.text, 2, 'left');
+  1541→scoreT.anchor.set(0, 0); scoreT.position.set(22, 16);
+  1542→const bestT = mkText('BEST 000000', 12, 500, COL.textDim, 2, 'left');
+  1543→bestT.anchor.set(0, 0); bestT.position.set(22, 44);
+  1544→const gunT = mkText('GUN 1 — PULSE', 12, 700, '#9dff3c', 2, 'left');
+  1545→gunT.anchor.set(0, 0); gunT.position.set(22, 64);
+  1546→const waveT = mkText('WAVE 1', 15, 700, '#b98cff', 4);
+  1547→waveT.anchor.set(0.5, 0); waveT.position.set(W / 2, 18);
+  1548→const comboT = mkText('', 15, 900, '#ffd23c', 2);
+  1549→comboT.anchor.set(0.5, 0); comboT.position.set(W / 2, 42); comboT.visible = false;
+  1550→const comboBar = new PIXI.Graphics();
+  1551→comboBar.position.set(W / 2, 66); comboBar.visible = false;
+  1552→const coinT = mkText('CR +0', 13, 700, '#ffd23c', 2, 'right');
+  1553→coinT.anchor.set(1, 0); coinT.position.set(W - 22, 52);
+  1554→let hpPips = [];
+  1555→function buildHpPips () {
+  1556→  for (const p of hpPips) { p.destroy(); }
+  1557→  hpPips = [];
+  1558→  for (let i = 0; i < player.hpMax; i++) {
+  1559→    const p = new PIXI.Sprite(TEX[shipTexName(player.ship)]);
+  1560→    p.anchor.set(0.5); p.scale.set(0.62);
+  1561→    p.position.set(W - 30 - i * 34, 30);
+  1562→    p.rotation = Math.PI / 2;
+  1563→    crisp.addChild(p); hpPips.push(p);
+  1564→  }
+  1565→}
+  1566→crisp.addChild(scoreT, bestT, gunT, waveT, comboT, comboBar, coinT);
+  1567→
+  1568→function hudScore () {
+  1569→  scoreT.text = 'SCORE ' + pad(S.score, 6);
+  1570→  bestT.text = 'BEST ' + pad(S.bestBeaten ? S.score : S.best, 6);
+  1571→  coinT.text = 'CR +' + S.runCoins;
+  1572→}
+  1573→function hudWave () { waveT.text = 'WAVE ' + Math.max(1, S.wave); }
+  1574→function hudGun () { gunT.text = 'GUN ' + player.gun + ' — ' + CFG.gunTiers[player.gun - 1].name; }
+  1575→function hudHP () { for (let i = 0; i < hpPips.length; i++) hpPips[i].alpha = i < player.hp ? 1 : 0.13; }
+  1576→
+  1577→function hudCombo (dt) {
+  1578→  if (S.combo > 0) {
+  1579→    S.comboT -= dt;
+  1580→    if (S.comboT <= 0) { S.combo = 0; }
+  1581→  }
+  1582→  const on = S.combo >= 2;
+  1583→  comboT.visible = on; comboBar.visible = on;
+  1584→  if (on) {
+  1585→    const m = comboMult();
+  1586→    comboT.text = 'COMBO ×' + m.toFixed(1);
+  1587→    comboT.style.fill = m >= 3.5 ? '#ff2ec4' : '#ffd23c';
+  1588→    const k = clamp(S.comboT / CFG.combo.window, 0, 1);
+  1589→    comboBar.clear()
+  1590→      .rect(-52, -1.5, 104, 3).fill({ color: 0xffffff, alpha: 0.10 })
+  1591→      .rect(-52, -1.5, 104 * k, 3).fill({ color: m >= 3.5 ? 0xff2ec4 : 0xffd23c, alpha: 0.9 });
+  1592→  }
+  1593→}
+  1594→
+  1595→function checkNewBest () {
+  1596→  if (!S.bestBeaten && S.best > 0 && S.score > S.best) {
+  1597→    S.bestBeaten = true;
+  1598→    popup(W / 2, 90, 'NEW BEST!', COL.player, 24);
+  1599→    bestT.text = 'BEST ' + pad(S.score, 6);
+  1600→    addTrauma(0.2);
+  1601→  }
+  1602→}
+  1603→
+  1604→// Wave banner (single pooled text, animated in the loop)
+  1605→const bannerT = mkText('', 40, 900, COL.text, 8);
+  1606→bannerT.anchor.set(0.5); bannerT.position.set(W / 2, H * 0.4);
+  1607→bannerT.visible = false;
+  1608→crisp.addChild(bannerT);
+  1609→const bannerSt = { t: 0, dur: 0 };
+  1610→function banner (txt, color, size, dur) {
+  1611→  bannerT.text = txt; bannerT.style.fill = color; bannerT.style.fontSize = size;
+  1612→  bannerSt.t = 0; bannerSt.dur = dur;
+  1613→  bannerT.visible = true; bannerT.alpha = 0; bannerT.scale.set(1.35);
+  1614→}
+  1615→function updateBanner (dt) {
+  1616→  if (!bannerT.visible) return;
+  1617→  bannerSt.t += dt;
+  1618→  const k = bannerSt.t / bannerSt.dur;
+  1619→  if (k >= 1) { bannerT.visible = false; return; }
+  1620→  const inK = clamp(bannerSt.t / 0.18, 0, 1);
+  1621→  const outK = clamp((bannerSt.dur - bannerSt.t) / 0.3, 0, 1);
+  1622→  bannerT.alpha = Math.min(inK, outK);
+  1623→  bannerT.scale.set(lerp(1.35, 1, inK));
+  1624→}
+  1625→
+  1626→/* ===== 10 OVERLAYS — game over / pause (Pixi) + title (DOM) ===== */
+  1627→const overC = new PIXI.Container();
+  1628→const pauseC = new PIXI.Container();
+  1629→overlayRoot.addChild(overC, pauseC);
+  1630→let overPromptT;
+  1631→
+  1632→const overScore = mkText('', 26, 700, COL.text, 3);
+  1633→const overBest = mkText('', 16, 500, COL.textDim, 2);
+  1634→const overWave = mkText('', 14, 500, COL.textDim, 2);
+  1635→const overCoins = mkText('', 14, 700, '#ffd23c', 2);
+  1636→{
+  1637→  const dim = new PIXI.Graphics().rect(0, 0, W, H).fill({ color: 0x05010a, alpha: 0.62 });
+  1638→  overC.addChild(dim);
+  1639→  const goMag = mkText('GAME OVER', 58, 900, '#ff2b4e', 5);
+  1640→  goMag.anchor.set(0.5); goMag.position.set(W / 2 + 3, H * 0.28 + 3); goMag.alpha = 0.8; goMag.blendMode = 'add';
+  1641→  const goCyan = mkText('GAME OVER', 58, 900, '#2cf6ff', 5);
+  1642→  goCyan.anchor.set(0.5); goCyan.position.set(W / 2, H * 0.28);
+  1643→  overScore.anchor.set(0.5); overScore.position.set(W / 2, H * 0.44);
+  1644→  overBest.anchor.set(0.5); overBest.position.set(W / 2, H * 0.44 + 36);
+  1645→  overWave.anchor.set(0.5); overWave.position.set(W / 2, H * 0.44 + 60);
+  1646→  overCoins.anchor.set(0.5); overCoins.position.set(W / 2, H * 0.44 + 86);
+  1647→  overPromptT = mkText('PRESS R OR CLICK TO RETRY — ESC FOR HANGAR', 15, 700, COL.text, 2);
+  1648→  overPromptT.anchor.set(0.5); overPromptT.position.set(W / 2, H * 0.60);
+  1649→  overC.addChild(goMag, goCyan, overScore, overBest, overWave, overCoins, overPromptT);
+  1650→}
+  1651→{
+  1652→  const dim = new PIXI.Graphics().rect(0, 0, W, H).fill({ color: 0x05010a, alpha: 0.45 });
+  1653→  pauseC.addChild(dim);
+  1654→  const pt = mkText('PAUSED', 42, 900, '#2cf6ff', 8);
+  1655→  pt.anchor.set(0.5); pt.position.set(W / 2, H * 0.42);
+  1656→  const pp = mkText('CLICK OR P TO RESUME — Q TO QUIT TO HANGAR', 15, 500, COL.textDim, 3);
+  1657→  pp.anchor.set(0.5); pp.position.set(W / 2, H * 0.42 + 48);
+  1658→  pauseC.addChild(pt, pp);
+  1659→}
+  1660→function hideOverlays () { overC.visible = false; pauseC.visible = false; }
+  1661→
+  1662→function showTitle () {
+  1663→  hideOverlays();
+  1664→  enemyPool.releaseAll(); ebPool.releaseAll(); bulletPool.releaseAll();
+  1665→  pickupPool.releaseAll(); telePool.releaseAll();
+  1666→  playerSpr.visible = false;
+  1667→  reticle.visible = false;
+  1668→  S.mode = 'title';
+  1669→  S.timescale = 1;
+  1670→  const ui = document.getElementById('ui');
+  1671→  if (ui) ui.style.display = 'block';
+  1672→  renderTitle();
+  1673→}
+  1674→function toOver () {
+  1675→  S.mode = 'over'; S.timescale = 1;
+  1676→  const isBest = S.score > S.best && S.score > 0;
+  1677→  if (isBest) {
+  1678→    S.best = S.score;
+  1679→    META.best = S.best;
+  1680→  }
+  1681→  META.coins += S.runCoins;
+  1682→  saveMeta();
+  1683→  overScore.text = 'SCORE ' + pad(S.score, 6);
+  1684→  overBest.text = (S.bestBeaten ? '★ NEW BEST  ' : '') + 'BEST ' + pad(S.best, 6);
+  1685→  overWave.text = 'REACHED WAVE ' + Math.max(1, S.wave);
+  1686→  overCoins.text = 'BANKED + ' + S.runCoins + ' CR  ·  TOTAL ' + META.coins + ' CR';
+  1687→  hudScore();
+  1688→  overC.visible = true;
+  1689→}
+  1690→function setPause (v) {
+  1691→  if (v && S.mode === 'playing') { S.mode = 'paused'; pauseC.visible = true; }
+  1692→  else if (!v && S.mode === 'paused') { S.mode = 'playing'; pauseC.visible = false; }
+  1693→}
+  1694→
+  1695→/* --- title screen DOM: hangar + shop --- */
+  1696→let shopMsgTimer = null;
+  1697→function shopDeny (msg) {
+  1698→  const el = document.getElementById('shopMsg');
+  1699→  if (!el) return;
+  1700→  el.textContent = msg;
+  1701→  el.style.opacity = 1;
+  1702→  if (shopMsgTimer) clearTimeout(shopMsgTimer);
+  1703→  shopMsgTimer = setTimeout(() => { el.style.opacity = 0; }, 1400);
+  1704→}
+  1705→function renderTitle () {
+  1706→  const st = document.getElementById('statline');
+  1707→  st.innerHTML = 'BEST ' + pad(META.best, 6) + ' &nbsp;·&nbsp; <b>' + META.coins + ' CR</b>';
+  1708→  const dp = document.getElementById('diffPills');
+  1709→  dp.innerHTML = Object.keys(CFG.diff).map(k =>
+  1710→    '<div class="pill' + (META.diff === k ? ' on' : '') + '" onclick="NVUI.setDiff(\'' + k + '\')">' +
+  1711→    CFG.diff[k].label + '</div>').join('');
+  1712→  const sc = document.getElementById('shipCards');
+  1713→  sc.innerHTML = Object.keys(CFG.ships).map(id => {
+  1714→    const s = CFG.ships[id];
+  1715→    const owned = META.owned.includes(id);
+  1716→    const eq = META.ship === id;
+  1717→    let btn;
+  1718→    if (eq) btn = '<button class="eqd" disabled>EQUIPPED</button>';
+  1719→    else if (owned) btn = '<button class="own" onclick="NVUI.pickShip(\'' + id + '\')">EQUIP</button>';
+  1720→    else btn = '<button onclick="NVUI.pickShip(\'' + id + '\')">BUY ' + s.cost + ' CR</button>';
+  1721→    return '<div class="card' + (eq ? ' eq' : '') + '"><h4>' + s.name + '</h4>' +
+  1722→      '<div class="st">' + s.flavor + '<br>' + s.stats + '</div>' + btn + '</div>';
+  1723→  }).join('');
+  1724→  const ur = document.getElementById('upgRow');
+  1725→  ur.innerHTML = Object.keys(CFG.upgrades).map(id => {
+  1726→    const u = CFG.upgrades[id];
+  1727→    const owned = !!META.upg[id];
+  1728→    return '<div class="upg' + (owned ? ' owned' : '') + '"><h5>' + u.name + '</h5>' +
+  1729→      '<div class="st">' + u.desc + '</div>' +
+  1730→      (owned ? '<button class="owned" disabled>INSTALLED</button>'
+  1731→             : '<button onclick="NVUI.buyUpg(\'' + id + '\')">BUY ' + u.cost + ' CR</button>') +
+  1732→      '</div>';
+  1733→  }).join('');
+  1734→  const af = document.getElementById('afToggle');
+  1735→  if (af) af.checked = META.autoFire;
+  1736→}
+  1737→window.NVUI = {
+  1738→  setDiff (k) { if (!CFG.diff[k]) return; META.diff = k; saveMeta(); renderTitle(); A.init(); A.ui(); },
+  1739→  pickShip (id) {
+  1740→    const s = CFG.ships[id];
+  1741→    if (!s) return;
+  1742→    A.init();
+  1743→    if (META.owned.includes(id)) {
+  1744→      META.ship = id;
+  1745→      saveMeta(); renderTitle(); A.ui();
+  1746→    } else if (META.coins >= s.cost) {
+  1747→      META.coins -= s.cost;
+  1748→      META.owned.push(id);
+  1749→      META.ship = id;
+  1750→      saveMeta(); renderTitle(); A.gun();
+  1751→      addTrauma(0.12);
+  1752→    } else {
+  1753→      shopDeny('NOT ENOUGH CR — NEED ' + (s.cost - META.coins) + ' MORE');
+  1754→      A.ui();
+  1755→    }
+  1756→  },
+  1757→  buyUpg (id) {
+  1758→    const u = CFG.upgrades[id];
+  1759→    if (!u || META.upg[id]) return;
+  1760→    A.init();
+  1761→    if (META.coins >= u.cost) {
+  1762→      META.coins -= u.cost;
+  1763→      META.upg[id] = true;
+  1764→      saveMeta(); renderTitle(); A.gun();
+  1765→      addTrauma(0.12);
+  1766→    } else {
+  1767→      shopDeny('NOT ENOUGH CR — NEED ' + (u.cost - META.coins) + ' MORE');
+  1768→      A.ui();
+  1769→    }
+  1770→  },
+  1771→  setAF (v) { META.autoFire = !!v; saveMeta(); },
+  1772→  start () { startRun(); },
+  1773→};
+  1774→
+  1775→/* ===== 11 AUDIO — Web Audio synth, zero files ===== */
+  1776→const A = (() => {
+  1777→  let ctx = null, master = null, noiseBuf = null;
+  1778→  let muted = !!META.muted;
+  1779→  function init () {
+  1780→    if (ctx) return;
+  1781→    const AC = window.AudioContext || window.webkitAudioContext;
+  1782→    if (!AC) return;
+  1783→    ctx = new AC();
+  1784→    master = ctx.createGain();
+  1785→    master.gain.value = muted ? 0 : CFG.audio.master;
+  1786→    master.connect(ctx.destination);
+  1787→    noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 0.5 | 0, ctx.sampleRate);
+  1788→    const d = noiseBuf.getChannelData(0);
+  1789→    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  1790→  }
+  1791→  function resume () { if (ctx && ctx.state === 'suspended') ctx.resume(); }
+  1792→  function tone ({ type, f0, f1, dur, vol, at }) {
+  1793→    if (!ctx || muted) return;
+  1794→    const t = ctx.currentTime + (at || 0);
+  1795→    const o = ctx.createOscillator(), g = ctx.createGain();
+  1796→    o.type = type;
+  1797→    o.frequency.setValueAtTime(Math.max(1, f0), t);
+  1798→    o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
+  1799→    g.gain.setValueAtTime(vol, t);
+  1800→    g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+  1801→    o.connect(g); g.connect(master);
+  1802→    o.start(t); o.stop(t + dur + 0.03);
+  1803→  }
+  1804→  function noise ({ dur, vol, lp0, lp1, at }) {
+  1805→    if (!ctx || muted) return;
+  1806→    const t = ctx.currentTime + (at || 0);
+  1807→    const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+  1808→    const f = ctx.createBiquadFilter(); f.type = 'lowpass';
+  1809→    f.frequency.setValueAtTime(Math.max(40, lp0), t);
+  1810→    f.frequency.exponentialRampToValueAtTime(Math.max(40, lp1), t + dur);
+  1811→    const g = ctx.createGain();
+  1812→    g.gain.setValueAtTime(vol, t);
+  1813→    g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+  1814→    src.connect(f); f.connect(g); g.connect(master);
+  1815→    src.start(t); src.stop(t + dur + 0.03);
+  1816→  }
+  1817→  return {
+  1818→    init, resume,
+  1819→    shoot (gun) {
+  1820→      const c = CFG.audio.shoot;
+  1821→      tone({ type: c.type, f0: c.f0 * (1 + gun * 0.07) * rand(0.94, 1.06), f1: c.f0 * c.fMul, dur: c.dur, vol: c.vol });
+  1822→    },
+  1823→    kill ()  { const c = CFG.audio.kill; noise(c.noise); tone(c.tone); },
+  1824→    hurt ()  { const c = CFG.audio.hurt; tone(c.tone); noise(c.noise); },
+  1825→    coin ()  { for (const t of CFG.audio.coin.tones) tone(t); },
+  1826→    gun ()   { const c = CFG.audio.gun; tone(c.tone); noise(c.noise); },
+  1827→    heal ()  { for (const t of CFG.audio.heal.tones) tone(t); },
+  1828→    ui ()    { tone(CFG.audio.ui.tone); },
+  1829→    boom ()  { const c = CFG.audio.boom; noise(c.noise); tone(c.tone); },
+  1830→    tier ()  { for (const t of CFG.audio.tier.tones) tone(t); },
+  1831→    toggleMute () {
+  1832→      muted = !muted;
+  1833→      META.muted = muted; saveMeta();
+  1834→      if (master) master.gain.value = muted ? 0 : CFG.audio.master;
+  1835→      return muted;
+  1836→    },
+  1837→    setMuted (m) { muted = !!m; if (master) master.gain.value = muted ? 0 : CFG.audio.master; },
+  1838→    get muted () { return muted; },
+  1839→  };
+  1840→})();
+  1841→
+  1842→/* ===== 12 INPUT ===== */
+  1843→const K = {};
+  1844→const M = { x: W / 2, y: H / 2 - 120, down: false };
+  1845→
+  1846→function toWorld (e) {
+  1847→  const r = app.canvas.getBoundingClientRect();
+  1848→  return {
+  1849→    x: (e.clientX - r.left - offX) / scaleS,
+  1850→    y: (e.clientY - r.top - offY) / scaleS,
+  1851→  };
+  1852→}
+  1853→window.addEventListener('keydown', e => {
+  1854→  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+  1855→  K[e.code] = true;
+  1856→  A.init(); A.resume();
+  1857→  if (e.code === 'KeyM') {
+  1858→    const m = A.toggleMute();
+  1859→    popup(M.x, M.y - 20, m ? 'MUTED' : 'SOUND ON', COL.textDim, 13);
+  1860→  } else if (e.code === 'KeyF') {
+  1861→    META.autoFire = !META.autoFire; saveMeta();
+  1862→    popup(M.x, M.y - 20, 'AUTO-FIRE ' + (META.autoFire ? 'ON' : 'OFF'), COL.textDim, 13);
+  1863→    A.ui();
+  1864→  } else if ((S.mode === 'title') && (e.code === 'Space' || e.code === 'Enter')) startRun();
+  1865→  else if ((S.mode === 'over') && (e.code === 'KeyR' || e.code === 'Space' || e.code === 'Enter')) startRun();
+  1866→  else if (S.mode === 'over' && e.code === 'Escape') showTitle();
+  1867→  else if (S.mode === 'paused' && e.code === 'KeyQ') showTitle();
+  1868→  else if (e.code === 'KeyP' || e.code === 'Escape') {
+  1869→    if (S.mode === 'playing') setPause(true);
+  1870→    else if (S.mode === 'paused') setPause(false);
+  1871→  }
+  1872→});
+  1873→window.addEventListener('keyup', e => { K[e.code] = false; });
+  1874→
+  1875→app.canvas.addEventListener('pointermove', e => {
+  1876→  const w = toWorld(e);
+  1877→  M.x = w.x; M.y = w.y;
+  1878→});
+  1879→app.canvas.addEventListener('pointerdown', e => {
+  1880→  A.init(); A.resume();
+  1881→  const w = toWorld(e);
+  1882→  M.x = w.x; M.y = w.y;
+  1883→  if (S.mode === 'title' || S.mode === 'over') startRun();
+  1884→  else if (S.mode === 'paused') setPause(false);
+  1885→  else if (S.mode === 'playing') M.down = true;
+  1886→});
+  1887→window.addEventListener('pointerup', () => { M.down = false; });
+  1888→window.addEventListener('pointercancel', () => { M.down = false; });
+  1889→window.addEventListener('blur', () => { M.down = false; if (S.mode === 'playing') setPause(true); });
+  1890→app.canvas.addEventListener('contextmenu', e => e.preventDefault());
+  1891→// audio unlock from the DOM menu too
+  1892→window.addEventListener('pointerdown', () => { A.init(); A.resume(); }, { capture: true });
+  1893→
+  1894→// static menu controls — start button + auto-fire toggle
+  1895→const startBtnEl = document.getElementById('startBtn');
+  1896→if (startBtnEl) startBtnEl.addEventListener('click', () => { A.init(); A.resume(); startRun(); });
+  1897→const afToggleEl = document.getElementById('afToggle');
+  1898→if (afToggleEl) afToggleEl.addEventListener('change', e => { if (window.NVUI) NVUI.setAF(e.target.checked); });
+  1899→
+  1900→/* ===== 13 RUN CONTROL + MAIN LOOP ===== */
+  1901→function startRun () {
+  1902→  hideOverlays();
+  1903→  const ui = document.getElementById('ui');
+  1904→  if (ui) ui.style.display = 'none';
+  1905→  S.score = 0; S.kills = 0; S.bestBeaten = false; S.wave = 0; S.tier = 1;
+  1906→  S.runCoins = 0; S.combo = 0; S.comboT = 0;
+  1907→  S.timescale = 1; S.hitstop = 0; S.trauma = 0; S.flashA = 0;
+  1908→  S.gridPulse = 0; S.dyingT = 0; S.rgbT = 0;
+  1909→  bulletPool.releaseAll(); ebPool.releaseAll();
+  1910→  partPool.releaseAll(); ringPool.releaseAll();
+  1911→  ghostPool.releaseAll(); popupPool.releaseAll(); telePool.releaseAll();
+  1912→  enemyPool.releaseAll(); pickupPool.releaseAll();
+  1913→  playerReset();
+  1914→  buildHpPips();
+  1915→  hudScore(); hudHP(); hudGun();
+  1916→  Wv.phase = 'idle';
+  1917→  S.mode = 'playing';
+  1918→  startWave(1);
+  1919→}
+  1920→
+  1921→app.ticker.add(tk => {
+  1922→  const rawDt = Math.min(tk.deltaMS, 34) / 1000;
+  1923→  let dt;
+  1924→  if (S.hitstop > 0) { S.hitstop -= rawDt; dt = 0; }
+  1925→  else dt = rawDt * S.timescale;
+  1926→  S.time += dt;
+  1927→
+  1928→  fxUpdate(dt, rawDt);
+  1929→  reticle.position.set(M.x, M.y);
+  1930→  reticle.visible = S.mode === 'playing' || S.mode === 'dying' || S.mode === 'paused';
+  1931→  reticle.alpha = 0.7 + 0.3 * Math.sin(S.time * 6);
+  1932→  reticle.rotation = S.time * 0.6;
+  1933→
+  1934→  if (S.mode === 'playing') {
+  1935→    playerUpdate(dt);
+  1936→    updateBullets(dt);
+  1937→    updateEBullets(dt);
+  1938→    updateTeles(dt);
+  1939→    updateEnemies(dt);
+  1940→    collideBullets();
+  1941→    updatePickups(dt);
+  1942→    wavesUpdate(dt);
+  1943→    hudCombo(dt);
+  1944→  } else if (S.mode === 'dying') {
+  1945→    updateBullets(dt); updateEBullets(dt); updateTeles(dt);
+  1946→    updateEnemies(dt); collideBullets(); updatePickups(dt);
+  1947→    S.dyingT -= rawDt;
+  1948→    if (S.dyingT <= 0) toOver();
+  1949→  } else if (S.mode === 'over') {
+  1950→    updateBullets(dt); updateEBullets(dt); updateEnemies(dt); updatePickups(dt);
+  1951→  }
+  1952→
+  1953→  updateParticles(dt); updateRings(dt); updateGhosts(dt); updatePopups(dt);
+  1954→  updateBanner(dt);
+  1955→
+  1956→  if (overC.visible) overPromptT.alpha = 0.55 + 0.45 * Math.sin(S.time * 4.2);
+  1957→});
+  1958→
+  1959→// Dev hooks (?debug=1)
+  1960→if (location.search.includes('debug')) {
+  1961→  window.NV = {
+  1962→    app, S, CFG, META, player, DIFF,
+  1963→    pools: { bullet: bulletPool, eb: ebPool, enemy: enemyPool, pickup: pickupPool,
+  1964→             tele: telePool, part: partPool, ring: ringPool, ghost: ghostPool, popup: popupPool },
+  1965→    spawnEnemy, startRun, showTitle, toOver,
+  1966→    Wv, startWave, telegraphSpawn,
+  1967→    killAll: () => { enemyPool.releaseAll(); telePool.releaseAll(); ebPool.releaseAll(); },
+  1968→    giveGun: n => { player.gun = clamp(n || player.gun + 1, 1, 5); S.gun = player.gun; hudGun(); },
+  1969→    addCR: n => { S.runCoins += (n || 50); hudScore(); },
+  1970→    addCoins: n => { META.coins += (n || 100); saveMeta(); renderTitle(); },
+  1971→    forceKill: () => { for (const d of enemyPool.items) if (d.active) killEnemy(d, true); },
+  1972→    hitMe: () => playerHit(1, 0),
+  1973→  };
+  1974→}
+  1975→
+  1976→resize();
+  1977→hudScore(); hudHP();
+  1978→showTitle();
+  1979→
+  1980→})().catch(err => {
+  1981→  console.error('[NeonVoid] boot failure:', err);
+  1982→  const el = document.getElementById('boot-error');
+  1983→  if (el) { el.style.display = 'flex'; el.innerHTML += '<br><small>' + (err && err.message ? err.message : err) + '</small>'; }
+  1984→});
+  1985→
+  1986→</script>
+  1987→</body>
+  1988→</html>
+  1989→
